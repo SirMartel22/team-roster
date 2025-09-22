@@ -40,7 +40,7 @@ const Form = () => {
       console.log(data);
 
       try {
-        const response = await axios.post(`${import.meta.env.NEXT_PUBLIC_BACKEND_URL}/server/server`, data);
+        const response = await axios.post(`${import.meta.env.VITE_BACKEND_URL}/server/server`, data);
         console.log(response.data);
 
         // e.target.reset();

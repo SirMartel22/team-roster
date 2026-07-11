@@ -1,7 +1,9 @@
 // Centralizes the Prisma Client instance so every file that needs database
 // access imports the SAME instance, rather than creating a new database
 // connection every time a file needs one.
-const { PrismaClient } = require('../generated/prisma');
+// const { PrismaClient } = require('../generated/prisma');
+
+const { PrismaClient } = require('@prisma/client');
 const { PrismaPg } = require('@prisma/adapter-pg');
 const { Pool } = require('pg');
 

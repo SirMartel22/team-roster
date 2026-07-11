@@ -1,0 +1,110 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+}
+
+model Church {
+  id               String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name             String
+  createdAt        DateTime?         @default(now()) @map("created_at") @db.Timestamptz(6)
+  duties           Duty[]
+  members          Member[]
+  notificationLogs NotificationLog[]
+  rosters          Roster[]
+  subunits         Subunit[]
+  users            User[]
+
+  @@map("churches")
+}
+
+model User {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  churchId     String    @map("church_id") @db.Uuid
+  email        String
+  passwordHash String    @map("password_hash")
+  role         String    @default("member")
+  name         String
+  createdAt    DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  member       Member?
+  church       Church    @relation(fields: [churchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([churchId, email])
+  @@map("users")
+}
+
+model Subunit {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  churchId  String    @map("church_id") @db.Uuid
+  name      String
+  createdAt DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  duties    Duty[]
+  members   Member[]
+  church    Church    @relation(fields: [churchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([churchId, name])
+  @@map("subunits")
+}
+
+model Member {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  churchId  String    @map("church_id") @db.Uuid
+  userId    String    @unique @map("user_id") @db.Uuid
+  subunitId String    @map("subunit_id") @db.Uuid
+  phone     String?
+  whatsapp  String?
+  isActive  Boolean   @default(true) @map("is_active")
+  createdAt DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  church    Church    @relation(fields: [churchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  subunit   Subunit   @relation(fields: [subunitId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user      User      @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  rosters   Roster[]
+
+  @@map("members")
+}
+
+model Duty {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  churchId  String    @map("church_id") @db.Uuid
+  subunitId String    @map("subunit_id") @db.Uuid
+  name      String
+  createdAt DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  church    Church    @relation(fields: [churchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  subunit   Subunit   @relation(fields: [subunitId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  rosters   Roster[]
+
+  @@map("duties")
+}
+
+model Roster {
+  id               String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  churchId         String            @map("church_id") @db.Uuid
+  dutyId           String            @map("duty_id") @db.Uuid
+  memberId         String            @map("member_id") @db.Uuid
+  serviceDate      DateTime          @map("service_date") @db.Date
+  status           String            @default("scheduled")
+  createdAt        DateTime?         @default(now()) @map("created_at") @db.Timestamptz(6)
+  notificationLogs NotificationLog[]
+  church           Church            @relation(fields: [churchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  duty             Duty              @relation(fields: [dutyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  member           Member            @relation(fields: [memberId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([dutyId, serviceDate])
+  @@map("rosters")
+}
+
+model NotificationLog {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  churchId  String    @map("church_id") @db.Uuid
+  rosterId  String    @map("roster_id") @db.Uuid
+  channel   String
+  status    String    @default("pending")
+  sentAt    DateTime? @map("sent_at") @db.Timestamptz(6)
+  createdAt DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  church    Church    @relation(fields: [churchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  roster    Roster    @relation(fields: [rosterId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("notifications_logs")
+}

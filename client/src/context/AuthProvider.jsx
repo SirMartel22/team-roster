@@ -16,8 +16,6 @@ export const AuthProvider = ({ children }) => {
     const login = useCallback(async (email, password) => {
         setIsLoading(true);
         setError(null);
-
-
         try{
             const response = await fetch(
                 `${import.meta.env.VITE_AUTH_SERVICE_URL}/login`,

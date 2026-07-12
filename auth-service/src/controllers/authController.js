@@ -66,6 +66,12 @@ async function register(req, res) {
 // Login Function here
 
 async function login(req, res) {
+
+    // TEMPORARY DEBUG - remove after diagnosing
+    console.log('Content-Type header:', req.headers['content-type']);
+    console.log('req.body:', req.body);
+    console.log('typeof req.body:', typeof req.body);
+
     //get the email and password input values
     const {email, password} = req.body
 

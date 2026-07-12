@@ -21,7 +21,7 @@ export const AuthProvider = ({ children }) => {
                 `${import.meta.env.VITE_AUTH_SERVICE_URL}/login`,
                 {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/jso' },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ email, password}),
                 }
             );

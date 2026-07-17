@@ -2,6 +2,8 @@ const express = require('express');
 const cors = require('cors');
 const subunitRoutes = require('./routes/subunitRoutes');
 const memberRoutes = require('./routes/memberRoutes')
+const rosterRoutes = require('./routes/rosterRoutes')
+const dutyRoutes = require('./routes/dutyRoutes')
 
 const app = express();
 
@@ -20,6 +22,8 @@ app.get('/health', (req, res) => {
 
 app.use('/', subunitRoutes);
 app.use('/', memberRoutes);
+app.use('/', dutyRoutes) 
+app.use('/', rosterRoutes)
 
 module.exports = app;
 

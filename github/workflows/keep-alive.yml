@@ -1,0 +1,24 @@
+# This workflow pings both backend services every 5 minutes to prevent
+# Render's free tier from spinning them down due to inactivity.
+
+name: Keep Backend Services Alive
+
+on:
+  schedule:
+     # Cron syntax: minute hour day month weekday
+    # "*/5 * * * *" = every 5 minutes, every hour, every day
+    - cron: '*5 * * * *'
+
+     # Also allow manually triggering this workflow from GitHub's UI,
+     # useful for testing without waiting for the schedule.
+      workflow_dispatch:
+
+jobs: 
+  ping-services:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping auth-services
+        run: curl -s -o /dev/null -w "auth-services: %{http_code}\n" https://team-roster-egya.onrender.com/health
+
+      - name: Ping roster-core-service
+        run: curl -s -o /dev/null -w "roster-core-service: %{http_code}\n" https://team-roster-roster-core-service.onrender.com/health

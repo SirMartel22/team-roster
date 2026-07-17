@@ -5,6 +5,6 @@ const { generateRoster, getRosterByDate } = require('../controllers/rosterContro
 const router = express.Router();
 
 router.post('/rosters/generate', generateRoster);
-router.post('/rosters', getRosterByDate);
+router.get('/rosters', getRosterByDate);
 
 module.exports = router;

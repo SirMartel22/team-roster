@@ -60,6 +60,8 @@ const getRosterByDate = async (req, res) => {
         },
       },
     });
+
+    res.status(200).json({ rosterEntries })
   } catch (error) {
     console.error("Error fetching roster: ", error);
     res.status(500).json({

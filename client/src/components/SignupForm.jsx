@@ -116,80 +116,61 @@ export function SignupForm({ onSignupComplete }) {
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      style={{ maxWidth: "400px", margin: "2rem auto" }}
-    >
-      <h2>Sign Up</h2>
+    <form onSubmit={handleSubmit} className="auth-form">
+      <div className="auth-form-header">
+        <p className="eyebrow">Get started</p>
+        <h1>Create your roster account</h1>
+        <p className="auth-subtitle">
+          Register to join your BHBC subunit and manage member information easily.
+        </p>
+      </div>
 
-      {error && (
-        <div style={{ color: "red", marginBottom: "1rem" }}>{error}</div>
-      )}
+      {error && <div className="auth-error">{error}</div>}
 
-      <div style={{ marginBottom: "1rem" }}>
-        <label
-          htmlFor="name"
-          style={{ display: "block", marginBottom: "0.5rem" }}
-        >
-          Full Name:
-        </label>
+      <div className="auth-input-group">
+        <label htmlFor="name">Full Name</label>
         <input
           id="name"
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
           disabled={isSubmitting}
-          style={{ width: "100%", padding: "0.5rem" }}
+          className="auth-input"
         />
       </div>
 
-      <div style={{ marginBottom: "1rem" }}>
-        <label
-          htmlFor="email"
-          style={{ display: "block", marginBottom: "0.5rem" }}
-        >
-          Email:
-        </label>
+      <div className="auth-input-group">
+        <label htmlFor="email">Email</label>
         <input
           id="email"
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           disabled={isSubmitting}
-          style={{ width: "100%", padding: "0.5rem" }}
+          className="auth-input"
         />
       </div>
 
-      <div style={{ marginBottom: "1rem" }}>
-        <label
-          htmlFor="password"
-          style={{ display: "block", marginBottom: "0.5rem" }}
-        >
-          Password:
-        </label>
+      <div className="auth-input-group">
+        <label htmlFor="password">Password</label>
         <input
           id="password"
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           disabled={isSubmitting}
-          style={{ width: "100%", padding: "0.5rem" }}
+          className="auth-input"
         />
       </div>
 
-      <div style={{ marginBottom: "1rem" }}>
-        <label
-          htmlFor="subunit"
-          style={{ display: "block", marginBottom: "0.5rem" }}
-        >
-          Subunit:
-        </label>
+      <div className="auth-input-group">
+        <label htmlFor="subunit">Subunit</label>
         <select
           id="subunit"
           value={subunitId}
           onChange={(e) => setSubunitId(e.target.value)}
           disabled={isSubmitting}
-          style={{ width: "100%", padding: "0.5rem" }}
+          className="auth-input"
         >
           <option value="">-- Select a subunit --</option>
           {subunits.map((s) => (
@@ -200,46 +181,32 @@ export function SignupForm({ onSignupComplete }) {
         </select>
       </div>
 
-      <div style={{ marginBottom: "1rem" }}>
-        <label
-          htmlFor="phone"
-          style={{ display: "block", marginBottom: "0.5rem" }}
-        >
-          Phone (optional):
-        </label>
+      <div className="auth-input-group">
+        <label htmlFor="phone">Phone (optional)</label>
         <input
           id="phone"
           type="tel"
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
           disabled={isSubmitting}
-          style={{ width: "100%", padding: "0.5rem" }}
+          className="auth-input"
         />
       </div>
 
-      <div style={{ marginBottom: "1rem" }}>
-        <label
-          htmlFor="whatsapp"
-          style={{ display: "block", marginBottom: "0.5rem" }}
-        >
-          WhatsApp (optional):
-        </label>
+      <div className="auth-input-group">
+        <label htmlFor="whatsapp">WhatsApp (optional)</label>
         <input
           id="whatsapp"
           type="tel"
           value={whatsapp}
           onChange={(e) => setWhatsapp(e.target.value)}
           disabled={isSubmitting}
-          style={{ width: "100%", padding: "0.5rem" }}
+          className="auth-input"
         />
       </div>
 
-      <button
-        type="submit"
-        disabled={isSubmitting}
-        style={{ width: "100%", padding: "0.75rem" }}
-      >
-        {isSubmitting ? "Signing up..." : "Sign Up"}
+      <button type="submit" disabled={isSubmitting} className="auth-button">
+        {isSubmitting ? 'Signing up...' : 'Sign Up'}
       </button>
     </form>
   );

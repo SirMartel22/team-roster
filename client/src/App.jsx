@@ -4,6 +4,7 @@ import { AuthContext } from './context/authContext';
 import { LoginForm } from './components/LoginForm';
 import { SignupForm } from './components/SignupForm';
 import { Dashboard } from './components/Dashboard';
+import './auth.css';
 
 
 
@@ -18,31 +19,36 @@ const AppContent = () => {
     return <Dashboard />
   }
 
-  // return (
-  //   <div style={{ fontfamily: 'sans-serif'}}>
-  //     {user ? <Dashboard /> : <LoginForm/>}
-  //   </div>
-  // );
   return (
-     <div style={{ fontFamily: 'sans-serif' }}>
-        {showSignup ? (
-          <>
+    <div className="auth-page">
+      <div className="auth-card">
+        <div className="auth-card-content">
+          {showSignup ? (
             <SignupForm onSignupComplete={() => setShowSignup(false)} />
-            <p style={{ textAlign: 'center' }}>
-              Already have an account?{' '}
-              <button onClick={() => setShowSignup(false)}>Log in</button>
-            </p>
-          </>
-        ) : (
-          <>
+          ) : (
             <LoginForm />
-            <p style={{ textAlign: 'center' }}>
-              Need an account?{' '}
-              <button onClick={() => setShowSignup(true)}>Sign up</button>
-            </p>
-          </>
-        )}
+          )}
+
+          <div className="auth-toggle">
+            {showSignup ? (
+              <>
+                <span>Already have an account?</span>
+                <button type="button" onClick={() => setShowSignup(false)}>
+                  Log in
+                </button>
+              </>
+            ) : (
+              <>
+                <span>Need an account?</span>
+                <button type="button" onClick={() => setShowSignup(true)}>
+                  Sign up
+                </button>
+              </>
+            )}
+          </div>
+        </div>
       </div>
+    </div>
   )
 } 
 

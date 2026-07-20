@@ -1,5 +1,5 @@
 import { useState, useContext } from 'react';
-import { AuthContext } from '../context/authContext'
+import { AuthContext } from '../context/authContext';
 
 export const LoginForm = () => {
   const { login, isLoading, error } = useContext(AuthContext);
@@ -7,64 +7,69 @@ export const LoginForm = () => {
   const [password, setPassword] = useState('');
   const [localError, setLocalError] = useState(null);
 
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLocalError(null);
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setLocalError(null);
-
-        if(!email || !password) {
-            setLocalError("Email and password are required");
-            return;
-        }
-
-        try {
-            await login(email, password);
-            // On success, AuthContext is updated, and the app can react to it
-            // (e.g., redirect to dashboard)
-
-        }  catch(error){
-            setLocalError(error.message);
-        }
+    if (!email || !password) {
+      setLocalError('Email and password are required');
+      return;
     }
 
-     return (
-    <form onSubmit={handleSubmit} style={{ maxWidth: '400px', margin: '2rem auto' }}>
-      <h2>Login</h2>
+    try {
+      await login(email, password);
+    } catch (error) {
+      setLocalError(error.message);
+    }
+  };
 
-      {error && <div style={{ color: 'red', marginBottom: '1rem' }}>{error}</div>}
-      {localError && <div style={{ color: 'red', marginBottom: '1rem' }}>{localError}</div>}
+  return (
+    <form onSubmit={handleSubmit} className="auth-form">
+      <div className="auth-form-header">
+        <p className="eyebrow">Welcome back</p>
+        <h1>Sign in to roster management</h1>
+        <p className="auth-subtitle">
+          Access your church member roster, subunit assignments, and duty schedules.
+        </p>
+      </div>
 
-      <div style={{ marginBottom: '1rem' }}>
-        <label htmlFor="email" style={{ display: 'block', marginBottom: '0.5rem' }}>
-          Email:
-        </label>
+      {error && <div className="auth-error">{error}</div>}
+      {localError && <div className="auth-error">{localError}</div>}
+
+      <div className="auth-input-group">
+        <label htmlFor="email">Email</label>
         <input
           id="email"
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           disabled={isLoading}
-          style={{ width: '100%', padding: '0.5rem' }}
+          className="auth-input"
         />
       </div>
 
-      <div style={{ marginBottom: '1rem' }}>
-        <label htmlFor="password" style={{ display: 'block', marginBottom: '0.5rem' }}>
-          Password:
-        </label>
+      <div className="auth-input-group">
+        <label htmlFor="password">Password</label>
         <input
           id="password"
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           disabled={isLoading}
-          style={{ width: '100%', padding: '0.5rem' }}
+          className="auth-input"
         />
       </div>
 
-      <button type="submit" disabled={isLoading} style={{ width: '100%', padding: '0.75rem' }}>
+      <div className="auth-actions-row">
+        <span className="auth-hint">Remember me</span>
+        <button type="button" className="link-button">
+          Forgot password?
+        </button>
+      </div>
+
+      <button type="submit" disabled={isLoading} className="auth-button">
         {isLoading ? 'Logging in...' : 'Login'}
       </button>
     </form>
   );
-}
+};

@@ -3,26 +3,6 @@ const prisma = require("../config/prismaClient");
 const BHBC_CHURCH_ID = process.env.BHBC_CHURCH_ID;
 
 // GET /members - list of all members for BHBC
-// const getMembers = async (req, res) => {
-
-//     try{
-
-//         const members = await prisma.member.findMany({
-//             where: { churchId: BHBC_CHURCH_ID },
-//             include: {
-//                 subunit: true, // join members.subunit_id -> subunits.id
-//                 user: true, // join members.user_id -> users.id
-//             },
-//             orderBy: { createdAt: 'desc'}
-//         });
-//         res.status(200).json({members})
-
-//     } catch(error){
-//         console.error("Error fetching members: ", errro);
-//         res.status(500).json({message: "Failed to fetch members"})
-//     }
-// }
-
 const getMembers = async (req, res) => {
   try {
     //req.user comes from the requireAuth middleware - { userId, churchId, role}

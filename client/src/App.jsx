@@ -9,12 +9,19 @@ import './auth.css';
 
 
 const AppContent = () => {
-  const { user } = useContext(AuthContext);
+  const { user, isInitializing } = useContext(AuthContext);
 
   //Track whether we're showing the login login form or the signup form,
   //when the user isn't logged in yet.
-  const [showSignup, setShowSignup] = useState(false)
+  const [showSignup, setShowSignup] = useState(false);
 
+  // NEW: while we're still checking localStorage/validating the token,
+  // show a simple loading state instead of prematurely showing the
+  // login form (which would just flash and then disappear).
+
+  if(isInitializing){
+    return <div style={{ padding: '2rem', textAlign: 'center'}}>Loading...</div>;
+  }
   if(user){
     return <Dashboard />
   }

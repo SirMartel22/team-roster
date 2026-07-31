@@ -1,6 +1,6 @@
 //Defines the URL path (/register, /login) and which functions handle each
 const express = require("express");
-const { register, login } = require("../controllers/authController");
+const { register, login, createTeam, getChurches } = require("../controllers/authController");
 const requireAuth = require("../middleware/authMiddleware");
 const requireRole = require("../middleware/requireRole");
 const supabase = require("../config/supabaseClient");
@@ -9,6 +9,10 @@ const router = express.Router();
 
 router.post("/register", register);
 router.post("/login", login);
+router.post("/teams", createTeam); //public - this is the entry point for a brand new team
+router.get('/churches', getChurches)//public - needed before login, for the join-team dropdown
+
+
 
 // A simple test route to confirm the middleware works, before we build
 // anything real on top of it.

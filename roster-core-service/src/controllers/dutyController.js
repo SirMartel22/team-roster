@@ -1,6 +1,6 @@
 const prisma = require('../config/prismaClient');
 
-const BHBC_CHURCH_ID = process.env.BHBC_CHURCH_ID;
+// const BHBC_CHURCH_ID = process.env.BHBC_CHURCH_ID;
 
 // GET /duties — list all duties, optionally filtered by subunit
 const getDuties = async(req, res) => {
@@ -9,12 +9,14 @@ const getDuties = async(req, res) => {
     // of always getting every duty across every subunit.
 
     const { subunitId } = req.query;
+    const { churchId } = req.user; 
 
     try {
         const duties = await prisma.duty.findMany({
             where: {
-                churchId: BHBC_CHURCH_ID,
-                  // Conditionally include subunitId in the filter only if it was
+                // churchId: BHBC_CHURCH_ID,
+                churchId,
+                // Conditionally include subunitId in the filter only if it was
                 // provided — if subunitId is undefined, Prisma just ignores
                 // that key entirely and returns duties across all subunits.
                 ...(subunitId ? {subunitId} : {}),
@@ -34,11 +36,11 @@ const getDuties = async(req, res) => {
 // Expects: { subunitId, name }
 
 const createDuty = async(req, res) => {
-    const { subunitId, name } = req.body;
+    const { subunitId, name, churchId } = req.body;
 
-    if(!subunitId || !name ){
+    if(!subunitId || !name || !churchId){
         return res.status(400).json({
-            message: 'SubunitId and name are required'
+            message: 'SubunitId, name and churchId are required'
         });
     }
 
@@ -53,7 +55,7 @@ const createDuty = async(req, res) => {
             },
         });
 
-        if(!subunit || subunit.churchId !== BHBC_CHURCH_ID){
+        if(!subunit || subunit.churchId !== churchId){
             return res.status(400).json({
                 message: 'Subunit not found'
             });
@@ -61,7 +63,7 @@ const createDuty = async(req, res) => {
 
         const duty = await prisma.duty.create({
             data: {
-                churchId: BHBC_CHURCH_ID,
+                churchId,
                 subunitId,
                 name,
             },
@@ -83,7 +85,7 @@ const createDuty = async(req, res) => {
 // Worth having for cleanup during testing/admin correction of mistakes.
 
 const deleteDuty= async(req, res) => {
-    const { id } = req.param;
+    const { id } = req.params;
 
     try{
         await prisma.duty.delete({ 

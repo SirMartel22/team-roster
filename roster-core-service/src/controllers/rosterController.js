@@ -1,13 +1,14 @@
 const prisma = require("../config/prismaClient");
 const { generateRosterForDate } = require("../services/schedulingService");
 
-const BHBC_CHURCH_ID = process.env.BHBC_CHURCH_ID;
+// const BHBC_CHURCH_ID = process.env.BHBC_CHURCH_ID;
 const NOTIFICATION_SERVICE_URL = process.env.NOTIFICATION_SERVICE_URL;
 
 // POST /rosters/generate - triggers the scheduling engine for a given data
 
 const generateRoster = async (req, res) => {
   const { serviceDate } = req.body;
+  const { churchId } = req.user;
 
   if (!serviceDate) {
     return res.status(400).json({
@@ -16,7 +17,7 @@ const generateRoster = async (req, res) => {
   }
 
   try {
-    const results = await generateRosterForDate(BHBC_CHURCH_ID, serviceDate);
+    const results = await generateRosterForDate(churchId, serviceDate);
 
     res.status(201).json({
       message: `Roster generation complete for ${serviceDate}`,
@@ -36,6 +37,7 @@ const generateRoster = async (req, res) => {
 
 const getRosterByDate = async (req, res) => {
   const { date } = req.query;
+  const { churchId } = req.user;
 
   if (!date) {
     return res.status(400).json({
@@ -46,7 +48,7 @@ const getRosterByDate = async (req, res) => {
   try {
     const rosterEntries = await prisma.roster.findMany({
       where: {
-        churchId: BHBC_CHURCH_ID,
+        churchId,
         serviceDate: new Date(date),
       },
       include: {
@@ -76,6 +78,7 @@ const getRosterByDate = async (req, res) => {
 // from 'scheduled' to 'published', then notifies each assigned member.
 const publishRoster = async (req, res) => {
   const { serviceDate } = req.body;
+  const { churchId } = req.user;
 
   if (!serviceDate) {
     return res.status(400).json({
@@ -90,7 +93,7 @@ const publishRoster = async (req, res) => {
 
     const rosterEntries = await prisma.roster.findMany({
       where: {
-        churchId: BHBC_CHURCH_ID,
+        churchId,
         serviceDate: new Date(serviceDate),
       },
       include: {
@@ -112,7 +115,7 @@ const publishRoster = async (req, res) => {
 
     await prisma.roster.updateMany({
       where: {
-        churchId: BHBC_CHURCH_ID,
+        churchId,
         serviceDate: new Date(serviceDate),
       },
       data: {
@@ -146,7 +149,7 @@ const publishRoster = async (req, res) => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          churchId: BHBC_CHURCH_ID,
+          churchId,
           serviceDate,
           assignments,
         }),

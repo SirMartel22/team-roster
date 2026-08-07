@@ -10,11 +10,11 @@ const JWT_SECRET = process.env.JWT_SECRET;
 //Each controller function has the exact same signature express expects
 // Register Function here
 const register = async (req, res) => {
-  const { email, password, name, role } = req.body;
+  const { email, password, name, role, churchId } = req.body;
 
-  if (!name || !password || !name) {
+  if (!email || !password || !name || !churchId) {
     return res.status(400).json({
-      message: "Email, password, and name are required",
+      message: "Email, password, name and churchId are required",
     });
   }
 
@@ -25,7 +25,8 @@ const register = async (req, res) => {
     const { data, error } = await supabase
       .from("users")
       .insert({
-        church_id: BHBC_CHURCH_ID,
+        // church_id: BHBC_CHURCH_ID,
+        church_id: churchId,
         email,
         password_hash: passwordHash,
         name,

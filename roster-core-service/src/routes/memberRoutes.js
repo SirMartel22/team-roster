@@ -1,6 +1,8 @@
 const express = require('express');
 const { getMembers, createMember, getMemberById, updateMember } = require("../controllers/memberController");
 const requireAuth = require('../middleware/authMiddleware');
+// const requireRole = require('../middleware/requireRole');
+
 
 const router = express.Router();
 

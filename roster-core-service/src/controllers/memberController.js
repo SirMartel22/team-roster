@@ -1,17 +1,18 @@
 const prisma = require("../config/prismaClient");
 
-const BHBC_CHURCH_ID = process.env.BHBC_CHURCH_ID;
+// const BHBC_CHURCH_ID = process.env.BHBC_CHURCH_ID;
 
 // GET /members - list of all members for BHBC
 const getMembers = async (req, res) => {
   try {
     //req.user comes from the requireAuth middleware - { userId, churchId, role}
 
-    const { userId, role } = req.user;
+    const { userId, role, churchId } = req.user;
 
     // console.log(userId)
 
-    let whereClause = { churchId: BHBC_CHURCH_ID };
+    // let whereClause = { churchId: BHBC_CHURCH_ID };
+    let whereClause = { churchId };
 
     if (role !== "admin") {
       // Not an admin — first, find THIS user's own member profile,
@@ -59,11 +60,11 @@ const getMembers = async (req, res) => {
 // Expects: { userId, subunitId, phone?, whatsapp? }
 
 const createMember = async(req, res) => {
-  const { userId, subunitId, phone, whatsapp } = req.body;
+  const { userId, subunitId, churchId, phone, whatsapp } = req.body;
 
-  if (!userId || !subunitId) {
+  if (!userId || !subunitId || !churchId) {
     res.status(400).json({
-      message: "UserId and SubunitId required",
+      message: "UserId, SubunitId and churchId are required",
     });
   }
 
@@ -73,7 +74,8 @@ const createMember = async(req, res) => {
       where: { id: subunitId },
     });
 
-    if (!subunit || subunit.churchId !== BHBC_CHURCH_ID) {
+    // if (!subunit || subunit.churchId !== BHBC_CHURCH_ID) {
+    if (!subunit || subunit.churchId !== churchId) {
       return res.status(404).json({
         message: "Subunit not found",
       });
@@ -81,7 +83,8 @@ const createMember = async(req, res) => {
 
     const member = await prisma.member.create({
       data: {
-        churchId: BHBC_CHURCH_ID,
+        // churchId: BHBC_CHURCH_ID,
+        churchId: churchId,
         userId,
         subunitId,
         phone: phone || null,

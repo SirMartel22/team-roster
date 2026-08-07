@@ -28,6 +28,3 @@ app.use('/', dutyRoutes)
 app.use('/', rosterRoutes)
 
 module.exports = app;
-
-
-

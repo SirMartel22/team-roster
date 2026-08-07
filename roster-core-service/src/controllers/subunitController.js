@@ -3,11 +3,19 @@ const prisma = require('../config/prismaClient')
 // GET /subunits — list all subunits for BHBC (or eventually, per-church once
 // multi-tenancy is actually in use beyond a single hardcoded church).
 
-async function getSubunits(req, res) {
+const getSubunits = async(req, res) => {
+
+    const { churchId } = req.query;
+
+    if (!churchId) {
+        return res.status(400).json({
+            message: 'churchId query parameter is required'
+        })
+    }
     try {
 
         const subunits = await prisma.subunit.findMany({
-
+            where: {churchId},
             //orderBy sorts the result - here, alphabetically by name
             orderBy: { name: 'asc'},
         });
@@ -16,7 +24,6 @@ async function getSubunits(req, res) {
         res.status(200).json({ subunits });
     }
     catch(error){
-
         //Catch some unexpected failure that might be 
         //coming from maybe the database connection issue
         console.error('Error fetching subunits:', error);
@@ -25,25 +32,25 @@ async function getSubunits(req, res) {
 } 
 
 // POST /subunits — create a new subunit (e.g. "Videography", "Photography").
-async function createSubunit(req, res) {
+const createSubunit = async(req, res) => {
     const { name } = req.body;
+    const { churchId } = req.user;
 
     if(!name) {
         return res.status(400).json({message: "Subunit name is required"});
     }
-
     try {
-
         // prisma.subunit.create() -> INSERT INTO subunits (...) VALUES (...), roughly
         const subunit = await prisma.subunit.create({
             data: {
-                churchId: process.env.BHBC_CHURCH_ID, //same hardcoded tenant pattern as auth-service
+                churchId: churchId, 
+                // churchId: process.env.BHBC_CHURCH_ID, //same hardcoded tenant pattern as auth-service
                 name,
             },
         });
 
         // 201 = Created, same convention as auth-service's /register route.
-        res.status(200).json({message: "Subunit Created Successfully", subunit});
+        res.status(201).json({message: "Subunit Created Successfully", subunit});
     } catch(error) {
         console.error('Error creating subunit name:', error);
         if (error.code === 'P2002'){

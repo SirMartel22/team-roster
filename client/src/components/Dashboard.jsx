@@ -8,6 +8,10 @@ export function Dashboard() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+
+  //Temporary log
+  console.log('User object:', user);
+
   // Derived flag — used purely to decide what to SHOW, not to enforce
   // any actual security. The real access control already happened on
   // the server when it filtered the /members response.
@@ -40,8 +44,16 @@ export function Dashboard() {
         // Subunits list stays public/unfiltered — everyone can see the
         // list of subunits that exist (needed for context, e.g. signup),
         // even though only admins can CREATE new ones.
+        // const subunitsRes = await fetch(
+        //   `${import.meta.env.VITE_ROSTER_SERVICE_URL}/subunits`,
+        // );
+
         const subunitsRes = await fetch(
-          `${import.meta.env.VITE_ROSTER_SERVICE_URL}/subunits`,
+          `${import.meta.env.VITE_ROSTER_SERVICE_URL}/subunits?churchId=${user.church_id}`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+            cache: "no-store",
+          },
         );
 
         if (!subunitsRes.ok) throw new Error("Failed to fetch subunits");

@@ -7,8 +7,8 @@ const requireAuth = require('../middleware/authMiddleware');
 const router = express.Router();
 
 router.get('/members', requireAuth, getMembers);
-router.post('/members', createMember);
-router.get('/members/:id', getMemberById);
-router.put('members/:id', updateMember);
+router.post('/members', requireAuth, createMember);
+router.get('/members/:id', requireAuth, getMemberById);
+router.put('/members/:id', requireAuth, updateMember);
 
 module.exports = router;

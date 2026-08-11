@@ -9,8 +9,10 @@ app.use(express.json());
 app.use(cors());
 
 app.get('/health', (req, res)=> {
-    res.status({
-        service: 'notification-service', status: 'ok', timestamp: new Date().toISOString()
+    res.json({
+        service: 'notification-service',
+        status: 'ok',
+        timestamp: new Date().toISOString(),
     });
 });
 

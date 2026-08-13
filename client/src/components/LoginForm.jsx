@@ -3,6 +3,7 @@ import { AuthContext } from '../context/authContext';
 
 export const LoginForm = () => {
   const { login, isLoading, error } = useContext(AuthContext);
+  const [workspaceSlug, setWorkspaceSlug] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [localError, setLocalError] = useState(null);
@@ -11,13 +12,13 @@ export const LoginForm = () => {
     e.preventDefault();
     setLocalError(null);
 
-    if (!email || !password) {
-      setLocalError('Email and password are required');
+    if (!workspaceSlug || !email || !password) {
+      setLocalError('Workspace, email and password are required');
       return;
     }
 
     try {
-      await login(email, password);
+      await login(workspaceSlug, email, password);
     } catch (error) {
       setLocalError(error.message);
     }
@@ -27,14 +28,27 @@ export const LoginForm = () => {
     <form onSubmit={handleSubmit} className="auth-form">
       <div className="auth-form-header">
         <p className="eyebrow">Welcome back</p>
-        <h1>Sign in to roster management</h1>
+        <h1>Sign in to your workspace</h1>
         <p className="auth-subtitle">
-          Access your church member roster, subunit assignments, and duty schedules.
+          Access your teams, unit assignments, task plans and work schedules.
         </p>
       </div>
 
       {error && <div className="auth-error">{error}</div>}
       {localError && <div className="auth-error">{localError}</div>}
+
+      <div className="auth-input-group">
+        <label htmlFor="workspaceSlug">Workspace</label>
+        <input
+          id="workspaceSlug"
+          value={workspaceSlug}
+          onChange={(e) => setWorkspaceSlug(e.target.value.toLowerCase())}
+          disabled={isLoading}
+          className="auth-input"
+          placeholder="e.g. bhbc-media"
+          autoComplete="organization"
+        />
+      </div>
 
       <div className="auth-input-group">
         <label htmlFor="email">Email</label>

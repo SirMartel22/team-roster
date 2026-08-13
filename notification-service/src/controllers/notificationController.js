@@ -1,103 +1,73 @@
 const { Resend } = require("resend");
-
 const supabase = require("../config/supabaseClient");
+const { escapeHtml } = require("../utils/html");
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-// POST /notify/roster-published
-// Called by roster-core-service after publishing a roster for a date.
-// Expects: { churchId, serviceDate, assignments: [{ rosterId, dutyName, memberName, memberEmail, subunitName }] }
+const sendLoggedEmail = async ({ churchId, rosterId = null, recipient, eventType, idempotencyKey, subject, html }) => {
+  const { data: existing } = await supabase.from("notifications_logs").select("id, status").eq("idempotency_key", idempotencyKey).maybeSingle();
+  if (existing?.status === "sent") return { status: "already_sent" };
+  if (existing?.status === "pending") return { status: "already_processing" };
+
+  const logPayload = { church_id: churchId, roster_id: rosterId, channel: "email", status: "pending", idempotency_key: idempotencyKey, error_message: null, recipient, event_type: eventType };
+  if (existing) {
+    const { data: claimed, error } = await supabase.from("notifications_logs").update(logPayload).eq("id", existing.id).eq("status", "failed").select("id").maybeSingle();
+    if (error || !claimed) return { status: "already_processing" };
+  } else {
+    const { error } = await supabase.from("notifications_logs").insert(logPayload);
+    if (error?.code === "23505") return { status: "already_processing" };
+    if (error) return { status: "failed", error: "Could not create delivery log" };
+  }
+
+  try {
+    const sendResult = await resend.emails.send({ from: process.env.NOTIFICATION_FROM || "Rosterly <onboarding@resend.dev>", to: recipient, subject, html });
+    if (sendResult.error) throw new Error(sendResult.error.message || "Email provider rejected the request");
+    await supabase.from("notifications_logs").update({ status: "sent", sent_at: new Date().toISOString(), error_message: null }).eq("idempotency_key", idempotencyKey);
+    return { status: "sent" };
+  } catch (error) {
+    console.error(`Failed to notify ${recipient}`, error);
+    await supabase.from("notifications_logs").update({ status: "failed", error_message: error.message }).eq("idempotency_key", idempotencyKey);
+    return { status: "failed", error: error.message };
+  }
+};
 
 const notifyRosterPublished = async (req, res) => {
   const { churchId, serviceDate, assignments } = req.body;
-
-  if (!churchId || !serviceDate || !Array.isArray(assignments)) {
-    return res.status(400).json({
-      message: "churchId, serviceDate, and assignments array are required",
+  if (!churchId || !/^\d{4}-\d{2}-\d{2}$/.test(serviceDate || "") || !Array.isArray(assignments)) return res.status(400).json({ message: "churchId, a YYYY-MM-DD serviceDate, and assignments are required" });
+  const results = await Promise.all(assignments.map(async ({ rosterId, dutyName, memberName, memberEmail, subunitName }) => {
+    if (!rosterId || !memberEmail) return { rosterId, status: "failed", error: "Invalid assignment payload" };
+    const result = await sendLoggedEmail({
+      churchId, rosterId, recipient: memberEmail, eventType: "roster-published", idempotencyKey: `${rosterId}:email`,
+      subject: `You're scheduled: ${dutyName} on ${serviceDate}`,
+      html: `<p>Hi ${escapeHtml(memberName)},</p><p>You've been scheduled for <strong>${escapeHtml(dutyName)}</strong> (${escapeHtml(subunitName)}) on <strong>${escapeHtml(serviceDate)}</strong>.</p><p>See you there!</p>`,
     });
-  }
-
-  // We process each assignment independently — one failed email shouldn't
-  // block the others from sending. Using Promise.allSettled (not Promise.all)
-  // specifically because it waits for EVERY promise to finish, success or
-  // failure, rather than stopping at the first rejection.
-
-  const results = await Promise.allSettled(
-    assignments.map(async (assignment) => {
-      const { rosterId, dutyName, memberName, memberEmail, subunitName } =
-        assignment;
-
-      try {
-        //Send the actual email via Resend.
-
-        await resend.emails.send({
-          from: "BHBC Media Roster <onboarding@resend.dev>",
-          to: memberEmail,
-          subject: `You're scheduled: ${dutyName} on ${serviceDate}`,
-          html: `
-                        <p>Hi ${memberName}, </p>
-                        <p> You've been scheduled for <strong>${dutyName}</strong>
-                            (${subunitName}) on <strong>${serviceDate}</strong>.
-                            <p>See you there!</p>
-                        </p>
-                    `,
-        });
-
-        //Log the successful send.
-        const { error: logError } = await supabase
-          .from("notifications_logs")
-          .insert({
-            church_id: churchId,
-            roster_id: rosterId,
-            channel: "email",
-            status: "sent",
-            sent_at: new Date().toISOString(),
-          });
-
-        if (logError) {
-          // The email might have genuinely sent, but we couldn't LOG it.
-          // Surface this clearly rather than silently reporting "sent".
-          console.error(
-            `Failed to log notification for ${memberEmail}:`,
-            logError,
-          );
-          return {
-            rosterId,
-            status: "sent_but_log_failed",
-            logError: logError.message,
-          };
-        }
-
-        return { rosterId, status: "sent" };
-      } catch (error) {
-        console.error(`Failed to notify ${memberEmail}:`, error);
-
-        // Log the failed attempt too — this is exactly why notification_logs
-        // exists: so "did they get notified?" has a real, queryable answer,
-        // not just silence when something goes wrong.
-
-        const { error: logError } = await supabase
-          .from("notifications_logs")
-          .insert({
-            church_id: churchId,
-            roster_id: rosterId,
-            channel: "email",
-            status: "failed",
-          });
-
-        if (logError) {
-          console.error(`Failed to log failure for ${memberEmail}:`, logError);
-        }
-
-        return { rosterId, status: "failed", error: error.message };
-      }
-    }),
-  );
-
-  res.status(200).json({
-    message: `Processed ${assignments.length} notifications`,
-    results: results.map((r) => r.value || r.reason),
-  });
+    return { rosterId, ...result };
+  }));
+  return res.json({ message: `Processed ${assignments.length} notifications`, results });
 };
 
-module.exports = { notifyRosterPublished };
+const notifyInvitation = async (req, res) => {
+  const { churchId, invitationId, email, inviteUrl } = req.body;
+  if (!churchId || !invitationId || !email || !inviteUrl) return res.status(400).json({ message: "Invalid invitation notification" });
+  const result = await sendLoggedEmail({
+    churchId, recipient: email, eventType: "invitation", idempotencyKey: `invitation:${invitationId}:${email}`,
+    subject: "You're invited to join a Rosterly workspace",
+    html: `<p>You've been invited to join a team workspace.</p><p><a href="${escapeHtml(inviteUrl)}">Accept your invitation</a></p><p>This link expires in seven days.</p>`,
+  });
+  return res.json({ message: "Invitation notification processed", result });
+};
+
+const notifySwitchRequest = async (req, res) => {
+  const { churchId, requestId, event, recipients, memberName, subunitName } = req.body;
+  if (!churchId || !requestId || !event || !Array.isArray(recipients)) return res.status(400).json({ message: "Invalid switch notification" });
+  const results = await Promise.all(recipients.map(({ email, name }) => sendLoggedEmail({
+    churchId, recipient: email, eventType: `switch-request-${event}`, idempotencyKey: `switch:${requestId}:${event}:${email}`,
+    subject: event === "created" ? "New work-unit switch request" : `Your work-unit request was ${event}`,
+    html: event === "created"
+      ? `<p>Hi ${escapeHtml(name)},</p><p>${escapeHtml(memberName)} submitted a work-unit switch request. Open Rosterly to review it.</p>`
+      : `<p>Hi ${escapeHtml(memberName)},</p><p>Your work-unit switch request was <strong>${escapeHtml(event)}</strong>${subunitName ? ` for ${escapeHtml(subunitName)}` : ""}.</p>`,
+  })));
+  return res.json({ message: "Switch notifications processed", results });
+};
+
+module.exports = { notifyRosterPublished, notifyInvitation, notifySwitchRequest, sendLoggedEmail };

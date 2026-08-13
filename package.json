@@ -1,0 +1,10 @@
+{
+  "name": "bhbc-media-roster",
+  "private": true,
+  "scripts": {
+    "test": "npm --prefix auth-service test && npm --prefix roster-core-service test && npm --prefix notification-service test",
+    "lint": "npm --prefix client run lint",
+    "build": "npm --prefix client run build",
+    "verify": "npm run test && npm run lint && npm run build"
+  }
+}

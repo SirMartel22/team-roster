@@ -9,7 +9,7 @@ const router = express.Router();
 
 
 router.get('/duties', requireAuth, getDuties);
-router.post('/duties', requireAuth, createDuty);
+router.post('/duties', requireAuth, requireRole('admin'), createDuty);
 router.delete('/duties/:id', requireAuth, requireRole('admin'), deleteDuty);
 
 

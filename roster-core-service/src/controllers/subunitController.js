@@ -1,63 +1,58 @@
-const prisma = require('../config/prismaClient')
+const prisma = require("../config/prismaClient");
+const { recordAudit } = require("../services/auditService");
 
-// GET /subunits — list all subunits for BHBC (or eventually, per-church once
-// multi-tenancy is actually in use beyond a single hardcoded church).
+const getSubunits = async (req, res) => {
+  const churchId = req.user?.churchId || req.query.churchId;
+  if (!churchId) return res.status(400).json({ message: "churchId is required" });
+  try {
+    const subunits = await prisma.subunit.findMany({ where: { churchId }, orderBy: { name: "asc" } });
+    return res.json({ subunits });
+  } catch (error) {
+    console.error("Error fetching subunits", error);
+    return res.status(500).json({ message: "Failed to fetch subunits" });
+  }
+};
 
-const getSubunits = async(req, res) => {
+const createSubunit = async (req, res) => {
+  if (!req.body.name?.trim()) return res.status(400).json({ message: "Subunit name is required" });
+  try {
+    const subunit = await prisma.subunit.create({ data: { churchId: req.user.churchId, name: req.body.name.trim() } });
+    await recordAudit({ churchId: req.user.churchId, actorUserId: req.user.userId, action: "subunit.created", entityType: "subunit", entityId: subunit.id });
+    return res.status(201).json({ message: "Subunit created", subunit });
+  } catch (error) {
+    console.error("Error creating subunit", error);
+    if (error.code === "P2002") return res.status(409).json({ message: "A subunit with this name already exists" });
+    return res.status(500).json({ message: "Failed to create subunit" });
+  }
+};
 
-    const { churchId } = req.query;
+const updateSubunit = async (req, res) => {
+  if (!req.body.name?.trim()) return res.status(400).json({ message: "Subunit name is required" });
+  try {
+    const existing = await prisma.subunit.findFirst({ where: { id: req.params.id, churchId: req.user.churchId } });
+    if (!existing) return res.status(404).json({ message: "Subunit not found" });
+    const subunit = await prisma.subunit.update({ where: { id: existing.id }, data: { name: req.body.name.trim() } });
+    await recordAudit({ churchId: req.user.churchId, actorUserId: req.user.userId, action: "subunit.updated", entityType: "subunit", entityId: subunit.id });
+    return res.json({ message: "Subunit updated", subunit });
+  } catch (error) {
+    if (error.code === "P2002") return res.status(409).json({ message: "A subunit with this name already exists" });
+    console.error("Error updating subunit", error);
+    return res.status(500).json({ message: "Failed to update subunit" });
+  }
+};
 
-    if (!churchId) {
-        return res.status(400).json({
-            message: 'churchId query parameter is required'
-        })
-    }
-    try {
+const deleteSubunit = async (req, res) => {
+  try {
+    const existing = await prisma.subunit.findFirst({ where: { id: req.params.id, churchId: req.user.churchId } });
+    if (!existing) return res.status(404).json({ message: "Subunit not found" });
+    await prisma.subunit.delete({ where: { id: existing.id } });
+    await recordAudit({ churchId: req.user.churchId, actorUserId: req.user.userId, action: "subunit.deleted", entityType: "subunit", entityId: existing.id });
+    return res.json({ message: "Subunit deleted" });
+  } catch (error) {
+    if (error.code === "P2003") return res.status(409).json({ message: "Cannot delete a unit that still has members, duties, or requests" });
+    console.error("Error deleting subunit", error);
+    return res.status(500).json({ message: "Failed to delete subunit" });
+  }
+};
 
-        const subunits = await prisma.subunit.findMany({
-            where: {churchId},
-            //orderBy sorts the result - here, alphabetically by name
-            orderBy: { name: 'asc'},
-        });
-
-        // return standard success status for a GET request
-        res.status(200).json({ subunits });
-    }
-    catch(error){
-        //Catch some unexpected failure that might be 
-        //coming from maybe the database connection issue
-        console.error('Error fetching subunits:', error);
-        res.status(500).json({message: "Failed to fetch subunits"})
-    }
-} 
-
-// POST /subunits — create a new subunit (e.g. "Videography", "Photography").
-const createSubunit = async(req, res) => {
-    const { name } = req.body;
-    const { churchId } = req.user;
-
-    if(!name) {
-        return res.status(400).json({message: "Subunit name is required"});
-    }
-    try {
-        // prisma.subunit.create() -> INSERT INTO subunits (...) VALUES (...), roughly
-        const subunit = await prisma.subunit.create({
-            data: {
-                churchId: churchId, 
-                // churchId: process.env.BHBC_CHURCH_ID, //same hardcoded tenant pattern as auth-service
-                name,
-            },
-        });
-
-        // 201 = Created, same convention as auth-service's /register route.
-        res.status(201).json({message: "Subunit Created Successfully", subunit});
-    } catch(error) {
-        console.error('Error creating subunit name:', error);
-        if (error.code === 'P2002'){
-            return res.status(409).json({message: "A subunit with this name already exists"})
-        }
-        res.status(500).json({message: "Failed to create subunit" })
-    }
-}
-
-module.exports = { getSubunits, createSubunit }
+module.exports = { getSubunits, createSubunit, updateSubunit, deleteSubunit };

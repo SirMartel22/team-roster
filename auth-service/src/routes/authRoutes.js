@@ -1,16 +1,19 @@
 //Defines the URL path (/register, /login) and which functions handle each
 const express = require("express");
-const { register, login, createTeam, getChurches } = require("../controllers/authController");
+const { register, login, createTeam, getChurches, getInvitation } = require("../controllers/authController");
 const requireAuth = require("../middleware/authMiddleware");
 const requireRole = require("../middleware/requireRole");
 const supabase = require("../config/supabaseClient");
+const rateLimit = require("../middleware/rateLimit");
+const { toUserDto } = require("../utils/userDto");
 
 const router = express.Router();
 
-router.post("/register", register);
-router.post("/login", login);
-router.post("/teams", createTeam); //public - this is the entry point for a brand new team
+router.post("/register", rateLimit({ max: 10 }), register);
+router.post("/login", rateLimit({ max: 10 }), login);
+router.post("/teams", rateLimit({ max: 5 }), createTeam); // public entry point for a new workspace
 router.get('/churches', getChurches)//public - needed before login, for the join-team dropdown
+router.get('/invitations/:token', getInvitation);
 
 
 
@@ -35,7 +38,7 @@ router.get("/me", requireAuth, async (req, res) => {
     }
     res.json({
       message: "You are Authenticated",
-      user,
+      user: toUserDto(user),
       // user: req.user
     });
   } catch (error) {

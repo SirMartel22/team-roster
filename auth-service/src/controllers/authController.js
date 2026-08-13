@@ -2,17 +2,26 @@
 
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken"); //For signing tokens
+const crypto = require("crypto");
 const supabase = require("../config/supabaseClient");
+const { toUserDto } = require("../utils/userDto");
+const { toSlug } = require("../utils/slug");
 
-const BHBC_CHURCH_ID = process.env.BHBC_CHURCH_ID;
 const JWT_SECRET = process.env.JWT_SECRET;
+
+const signUserToken = (user) => jwt.sign({
+  userId: user.id,
+  churchId: user.church_id,
+  role: user.role,
+}, JWT_SECRET, { expiresIn: "30d" });
 
 //Each controller function has the exact same signature express expects
 // Register Function here
 const register = async (req, res) => {
-  const { email, password, name, role, churchId } = req.body;
+  const { email, password, name, churchId: requestedChurchId, invitationToken } = req.body;
+  let churchId = requestedChurchId;
 
-  if (!email || !password || !name || !churchId) {
+  if (!email || !password || !name || (!churchId && !invitationToken)) {
     return res.status(400).json({
       message: "Email, password, name and churchId are required",
     });
@@ -25,14 +34,14 @@ const register = async (req, res) => {
     const { data, error } = await supabase
       .from("users")
       .insert({
-        // church_id: BHBC_CHURCH_ID,
         church_id: churchId,
         email,
         password_hash: passwordHash,
         name,
-        role: role || "member",
+        role: "member",
       })
-      .select("id, email, name, role, created_at");
+      .select("id, email, name, role, church_id, created_at")
+      .single();
 
     if (error) {
       console.error("Supabase insert error:", error);
@@ -48,7 +57,8 @@ const register = async (req, res) => {
 
     res.status(201).json({
       message: "User registered successfully",
-      user: data[0],
+      token: signUserToken(data),
+      user: toUserDto(data),
     });
   } catch (error) {
     console.error("Unexpected error:", error);
@@ -61,34 +71,54 @@ const register = async (req, res) => {
 // Login Function here
 
 const login = async (req, res) => {
-  // TEMPORARY DEBUG - remove after diagnosing
-  console.log("Content-Type header:", req.headers["content-type"]);
-  console.log("req.body:", req.body);
-  console.log("typeof req.body:", typeof req.body);
-
-  //get the email and password input values
-  const { email, password } = req.body;
+  const { workspaceSlug, email, password } = req.body;
 
   // validate the correctness of the login values
-  if (!email || !password) {
+  if (!workspaceSlug || !email || !password) {
     return res.status(400).json({
-      message: "Email and password are required",
+      message: "Workspace, email and password are required",
     });
   }
 
   try {
-    // compare data coming from supabase
+    let invitation = null;
+    if (invitationToken) {
+      const tokenHash = crypto.createHash("sha256").update(invitationToken).digest("hex");
+      const { data, error: invitationError } = await supabase
+        .from("invitations")
+        .select("id, church_id, email, status, expires_at")
+        .eq("token_hash", tokenHash)
+        .single();
+      if (invitationError || !data || data.status !== "pending" || new Date(data.expires_at) <= new Date()) {
+        return res.status(400).json({ message: "Invitation is invalid or expired" });
+      }
+      if (data.email.toLowerCase() !== email.toLowerCase()) {
+        return res.status(400).json({ message: "Use the email address that was invited" });
+      }
+      invitation = data;
+      churchId = data.church_id;
+    }
+
+    const { data: church, error: churchError } = await supabase
+      .from("churches")
+      .select("id, name, slug")
+      .eq("slug", toSlug(workspaceSlug))
+      .single();
+
+    if (churchError || !church) {
+      return res.status(401).json({ message: "Invalid workspace, email or password" });
+    }
 
     const { data: user, error } = await supabase
       .from("users")
       .select("*")
       .eq("email", email)
-      .eq("church_id", BHBC_CHURCH_ID)
+      .eq("church_id", church.id)
       .single();
 
     if (error || !user) {
       return res.status(401).json({
-        message: "Invalid email or password",
+        message: "Invalid workspace, email or password",
       });
     }
 
@@ -97,35 +127,19 @@ const login = async (req, res) => {
 
     if (!passwordMatches) {
       return res.status(401).json({
-        message: "Invalid email or password",
+        message: "Invalid workspace, email or password",
       });
     }
 
     //Sign in with JWT
     // The payload is the actual data we embedded in the token - kept minimal and non sensitive
-    const payload = {
-      userId: user.id,
-      churchId: user.church_id,
-      role: user.role,
-    };
-
-    // jwt.sign(payload, secret, options) -> produces the actual token string.
-    // expiresIn: '2h' means the token becomes invalid 2 hours after issuance
-
-    const token = jwt.sign(payload, JWT_SECRET, {
-      expiresIn: "30d",
-    });
+    const token = signUserToken(user);
 
     res.status(200).json({
       message: "Login successful",
       token, // the client stores this and sends it back on future request
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        church_id: user.church_id,
-      },
+      user: toUserDto(user),
+      workspace: church,
     });
   } catch (error) {
     console.error("Unexpected error during login", error);
@@ -140,7 +154,7 @@ const login = async (req, res) => {
 // which joins an EXISTING team as a regular member.
 
 const createTeam = async (req, res) => {
-  const { teamName, name, email, password } = req.body;
+  const { teamName, workspaceSlug, name, email, password } = req.body;
 
   if (!teamName || !name || !email || !password) {
     return res.status(400).json({
@@ -149,17 +163,21 @@ const createTeam = async (req, res) => {
   }
 
   try {
-    //Step 1: Create the new team (church) row
+    const slug = toSlug(workspaceSlug || teamName);
+    if (slug.length < 3) {
+      return res.status(400).json({ message: "Workspace name must produce a valid slug" });
+    }
+
     const { data: newChurch, error: churchError } = await supabase
       .from("churches")
-      .insert({ name: teamName })
-      .select("id, name, created_at")
+      .insert({ name: teamName, slug })
+      .select("id, name, slug, created_at")
       .single();
 
     if (churchError) {
       console.error("Error creating team:", churchError);
-      return res.status(500).json({
-        message: "Failed to create team",
+      return res.status(churchError.code === "23505" ? 409 : 500).json({
+        message: churchError.code === "23505" ? "That workspace URL is already in use" : "Failed to create team",
       });
     }
     // Step 2: Hash the password, same as regular registration.
@@ -203,17 +221,21 @@ const createTeam = async (req, res) => {
     // Step 4: Sign a token immediately — since this user just created
     // their team, auto-logging them in (rather than making them log in
     // separately right after) is a reasonable convenience here.
-    const payload = {
-        userId: newUser.id,
-        churchId: newUser.church_id,
-        role: newUser.role,
-    };
-    const token = jwt.sign(payload, JWT_SECRET, {expiresIn: '30d'});
+    const token = signUserToken(newUser);
+
+    if (invitation) {
+      const { error: acceptError } = await supabase
+        .from("invitations")
+        .update({ status: "accepted", accepted_at: new Date().toISOString() })
+        .eq("id", invitation.id)
+        .eq("status", "pending");
+      if (acceptError) console.error("Failed to mark invitation accepted", acceptError);
+    }
 
     res.status(201).json({
         message: 'Team created successfully',
         token,
-        user: newUser,
+        user: toUserDto(newUser),
         team: newChurch,
     });
   } catch (error) {
@@ -230,7 +252,7 @@ const getChurches = async(req, res)=> {
     try{
         const { data: churches, error } = await supabase
         .from('churches')
-        .select('id, name')
+        .select('id, name, slug')
         .order('name', {ascending: true});
 
         if(error){
@@ -248,5 +270,23 @@ const getChurches = async(req, res)=> {
     }
 }
 
+const getInvitation = async (req, res) => {
+  try {
+    const tokenHash = crypto.createHash("sha256").update(req.params.token).digest("hex");
+    const { data: invitation, error } = await supabase
+      .from("invitations")
+      .select("email, status, expires_at, churches(id, name, slug)")
+      .eq("token_hash", tokenHash)
+      .single();
+    if (error || !invitation || invitation.status !== "pending" || new Date(invitation.expires_at) <= new Date()) {
+      return res.status(404).json({ message: "Invitation is invalid or expired" });
+    }
+    return res.json({ invitation: { email: invitation.email, workspace: invitation.churches } });
+  } catch (error) {
+    console.error("Failed to validate invitation", error);
+    return res.status(500).json({ message: "Failed to validate invitation" });
+  }
+};
+
 // Export both functions so authRoute.js can import them and attach them to paths.
-module.exports = { register, login, createTeam, getChurches };
+module.exports = { register, login, createTeam, getChurches, getInvitation };

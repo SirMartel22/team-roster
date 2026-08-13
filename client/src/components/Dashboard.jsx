@@ -1,178 +1,122 @@
-import { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useMemo, useState } from "react";
 import { AuthContext } from "../context/authContext";
+import "../dashboard.css";
+import { MemberAssignments, PerformanceView, RequestsView, RosterPlanner, UnitManagement } from "./WorkspaceTools";
+
+const adminNav = ["Overview", "Members", "Units", "Schedule", "Requests"];
+const memberNav = ["My overview", "My team", "Assignments", "Requests", "Performance", "My profile"];
+
+const initials = (name = "Member") => name.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase();
+
+function Icon({ name }) {
+  const symbols = { Overview: "◈", Members: "◎", Units: "◇", Schedule: "◷", Requests: "↔", Assignments: "◷", Performance: "%", "My overview": "◈", "My team": "◎", "My profile": "○" };
+  return <span className="nav-icon" aria-hidden="true">{symbols[name]}</span>;
+}
 
 export function Dashboard() {
   const { user, token, logout } = useContext(AuthContext);
   const [members, setMembers] = useState([]);
   const [subunits, setSubunits] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-
-
-  //Temporary log
-  console.log('User object:', user);
-
-  // Derived flag — used purely to decide what to SHOW, not to enforce
-  // any actual security. The real access control already happened on
-  // the server when it filtered the /members response.
+  const [activeView, setActiveView] = useState(user?.role === "admin" ? "Overview" : "My overview");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const isAdmin = user?.role === "admin";
 
   useEffect(() => {
-    if (!token) return;
-
-    async function fetchData() {
-      setLoading(true);
-      setError(null);
-
-      try {
-        // This request now returns DIFFERENT data depending on who's
-        // asking — the server does this filtering, not the client.
-        // An admin gets everyone; a regular member gets only their
-        // own subunit's members.
-        const membersRes = await fetch(
-          `${import.meta.env.VITE_ROSTER_SERVICE_URL}/members`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-            cache: "no-store",
-          },
-        );
-
-        if (!membersRes.ok) throw new Error("Failed to fetch members");
-        const membersData = await membersRes.json();
+    if (!token || !user?.churchId) return;
+    const headers = { Authorization: `Bearer ${token}` };
+    Promise.all([
+      fetch(`${import.meta.env.VITE_ROSTER_SERVICE_URL}/members`, { headers, cache: "no-store" }),
+      fetch(`${import.meta.env.VITE_ROSTER_SERVICE_URL}/subunits?churchId=${user.churchId}`, { headers, cache: "no-store" }),
+    ])
+      .then(async ([membersResponse, subunitsResponse]) => {
+        if (!membersResponse.ok || !subunitsResponse.ok) throw new Error("We couldn't load your workspace data.");
+        const [membersData, subunitsData] = await Promise.all([membersResponse.json(), subunitsResponse.json()]);
         setMembers(membersData.members || []);
-
-        // Subunits list stays public/unfiltered — everyone can see the
-        // list of subunits that exist (needed for context, e.g. signup),
-        // even though only admins can CREATE new ones.
-        // const subunitsRes = await fetch(
-        //   `${import.meta.env.VITE_ROSTER_SERVICE_URL}/subunits`,
-        // );
-
-        const subunitsRes = await fetch(
-          `${import.meta.env.VITE_ROSTER_SERVICE_URL}/subunits?churchId=${user.church_id}`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-            cache: "no-store",
-          },
-        );
-
-        if (!subunitsRes.ok) throw new Error("Failed to fetch subunits");
-        const subunitsData = await subunitsRes.json();
         setSubunits(subunitsData.subunits || []);
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    }
+      })
+      .catch((requestError) => setError(requestError.message))
+      .finally(() => setLoading(false));
+  }, [token, user?.churchId]);
 
-    fetchData();
-  }, [token]);
+  const myMember = useMemo(() => members.find((member) => member.user?.id === user?.id) || members[0], [members, user?.id]);
+  const mySubunit = myMember?.subunit;
+  const navigation = isAdmin ? adminNav : memberNav;
+  const activeMembers = members.filter((member) => member.isActive !== false);
 
-  if (!user) {
-    return <div>Not logged in</div>;
-  }
-
-  // For a regular member, all fetched members already belong to their
-  // own subunit (server-enforced) — so we can just read the subunit
-  // name off the first member's own record, if any exist.
-  const myOwnSubunitName =
-    !isAdmin && members.length > 0 ? members[0].subunit?.name : null;
-
-  // console.log("User role:", user?.role);
-  // console.log("Members returned:", members);
-  // console.log("Is Admin:", isAdmin);
+  const changeView = (view) => { setActiveView(view); setMobileNavOpen(false); };
 
   return (
-    <div style={{ padding: "2rem" }}>
-      <div
-        style={{
-          marginBottom: "2rem",
-          display: "flex",
-          justifyContent: "space-between",
-        }}
-      >
+    <div className="dashboard-page">
+      <aside className={`dashboard-sidebar ${mobileNavOpen ? "open" : ""}`}>
         <div>
-          <h1>Welcome, {user.name}!</h1>
-          {/* Small role badge — helps during testing to confirm which
-              view you're looking at, and useful for real users too */}
-          <span
-            style={{
-              fontSize: "0.85rem",
-              padding: "0.2rem 0.6rem",
-              borderRadius: "4px",
-              backgroundColor: isAdmin ? "#4a2b8f" : "#2b5f8f",
-              color: "white",
-            }}
-          >
-            {isAdmin ? "Admin" : "Member"}
-          </span>
+          <div className="dashboard-brand"><span className="brand-mark">R</span><span>Rosterly</span></div>
+          <div className="workspace-chip"><span className="workspace-avatar">TW</span><div><small>WORKSPACE</small><strong>Team Workspace</strong></div><span className="chevron">⌄</span></div>
+          <nav className="sidebar-nav" aria-label="Dashboard navigation">
+            <p>WORKSPACE</p>
+            {navigation.map((item) => <button key={item} className={activeView === item ? "active" : ""} onClick={() => changeView(item)}><Icon name={item} />{item}</button>)}
+          </nav>
         </div>
-        <button onClick={logout}>Logout</button>
-      </div>
-
-      {error && (
-        <div style={{ color: "red", marginBottom: "1rem" }}>{error}</div>
-      )}
-      {loading && <div>Loading...</div>}
-
-      {isAdmin ? (
-        // ── ADMIN VIEW ──
-        // Sees every subunit and every member, across the whole church.
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: "2rem",
-          }}
-        >
-          <div>
-            <h2>All Subunits</h2>
-            <ul>
-              {subunits.map((s) => (
-                <li key={s.id}>{s.name}</li>
-              ))}
-            </ul>
-          </div>
-
-          <div>
-            <h2>All Members ({members.length})</h2>
-            <ul>
-              {members.map((m) => (
-                <li key={m.id}>
-                  {m.user?.name} — {m.subunit?.name}
-                </li>
-              ))}
-            </ul>
-          </div>
+        <div className="sidebar-bottom">
+          <div className="help-card"><span>?</span><strong>Need a hand?</strong><p>Everything you need to get your team ready.</p><button>View quick guide</button></div>
+          <button className="profile-button" onClick={logout}><span className="member-avatar">{initials(user?.name)}</span><span><strong>{user?.name}</strong><small>{isAdmin ? "Administrator" : mySubunit?.name || "Team member"}</small></span><b title="Sign out">→</b></button>
         </div>
-      ) : (
-        // ── MEMBER VIEW ──
-        // Sees only their own subunit, and only the members within it.
-        <div>
-          <h2>My Subunit: {myOwnSubunitName || "Not assigned"}</h2>
-          <ul>
-            {members.map((m) => (
-              <li key={m.id}>{m.user?.name}</li>
-            ))}
-          </ul>
+      </aside>
 
-          {/* Placeholder for the subunit-switch request feature —
-              not yet wired to a real backend endpoint, since that
-              flow hasn't been built yet. Button is here so the UI
-              shape exists, but clicking it doesn't do anything real yet. */}
-          <button disabled style={{ marginTop: "1rem", opacity: 0.5 }}>
-            Request Subunit Change (coming soon)
-          </button>
+      <main className="dashboard-main">
+        <header className="dashboard-header">
+          <div><button className="mobile-menu" onClick={() => setMobileNavOpen((open) => !open)} aria-label="Toggle navigation">☰</button><p>{new Intl.DateTimeFormat("en-NG", { weekday: "long", day: "numeric", month: "long" }).format(new Date())}</p><h1>{activeView}</h1></div>
+          <div className="dashboard-actions"><button className="icon-button" aria-label="Notifications">○<span /></button>{isAdmin && <button className="primary-action" onClick={() => changeView("Schedule")}>Plan work <span>→</span></button>}</div>
+        </header>
 
-          {/* Same placeholder for the attendance/performance report,
-              which also depends on schema work we haven't done yet. */}
-          <div style={{ marginTop: "2rem" }}>
-            <h3>My Performance Report</h3>
-            <p style={{ opacity: 0.6 }}>Coming soon</p>
-          </div>
-        </div>
-      )}
+        {error && <div className="dashboard-error">{error}<button onClick={() => window.location.reload()}>Try again</button></div>}
+        {loading ? <DashboardSkeleton /> : isAdmin ? (
+          <AdminContent view={activeView} members={members} activeMembers={activeMembers} subunits={subunits} onNavigate={changeView} token={token} onChanged={() => window.location.reload()} />
+        ) : (
+          <MemberContent view={activeView} members={members} user={user} mySubunit={mySubunit} myMember={myMember} subunits={subunits} token={token} />
+        )}
+      </main>
     </div>
   );
 }
+
+function AdminContent({ view, members, activeMembers, subunits, onNavigate, token, onChanged }) {
+  if (view === "Members") return <PeopleView members={members} title="All members" subtitle="Everyone working across your organisation's units." token={token} isAdmin />;
+  if (view === "Units") return <UnitManagement token={token} subunits={subunits} members={members} onChanged={onChanged} />;
+  if (view === "Schedule") return <RosterPlanner token={token} members={members} />;
+  if (view === "Requests") return <RequestsView token={token} isAdmin subunits={subunits} />;
+  return (
+    <div className="dashboard-content">
+      <section className="welcome-panel"><div><p className="eyebrow">TEAM PULSE</p><h2>Your organisation is taking shape.</h2><p>{activeMembers.length} active people are organised across {subunits.length} work {subunits.length === 1 ? "unit" : "units"}. Everything is ready for your next task plan.</p><button onClick={() => onNavigate("Schedule")}>Open planning <span>→</span></button></div><div className="pulse-visual"><span>{activeMembers.length}</span><small>active<br />members</small><i /></div></section>
+      <section className="stats-grid"><Stat label="Active members" value={activeMembers.length} note="Ready for assignment" icon="◎" /><Stat label="Work units" value={subunits.length} note="Across this workspace" icon="◇" /><Stat label="Task plan" value="Ready" note="Plan the next work cycle" icon="✓" /></section>
+      <section className="dashboard-grid">
+        <div className="panel"><PanelHeader title="Your work units" action="View all" onAction={() => onNavigate("Units")} /><div className="team-list">{subunits.slice(0, 5).map((subunit, index) => { const count = members.filter((member) => member.subunitId === subunit.id).length; return <div className="team-row" key={subunit.id}><span className={`team-symbol tone-${index % 4}`}>{subunit.name.slice(0, 1)}</span><div><strong>{subunit.name}</strong><small>{count} {count === 1 ? "member" : "members"}</small></div><div className="capacity-bar"><i style={{ width: `${Math.min(100, count * 18)}%` }} /></div><b>›</b></div>; })}{!subunits.length && <EmptyState copy="Create your first unit to organise the team." />}</div></div>
+        <div className="panel"><PanelHeader title="Recently added" action="All members" onAction={() => onNavigate("Members")} /><div className="people-list">{members.slice(0, 5).map((member) => <PersonRow key={member.id} member={member} />)}{!members.length && <EmptyState copy="New members will appear here." />}</div></div>
+      </section>
+    </div>
+  );
+}
+
+function MemberContent({ view, members, user, mySubunit, myMember, subunits, token }) {
+  if (view === "My team") return <PeopleView members={members} title={mySubunit?.name || "My team"} subtitle="The people you work alongside." />;
+  if (view === "My profile") return <ProfileView user={user} subunit={mySubunit} />;
+  if (view === "Assignments") return <MemberAssignments token={token} />;
+  if (view === "Requests") return <RequestsView token={token} isAdmin={false} subunits={subunits} />;
+  if (view === "Performance") return <PerformanceView token={token} member={myMember} />;
+  return (
+    <div className="dashboard-content">
+      <section className="member-hero"><div><p className="eyebrow">WELCOME BACK</p><h2>Good to see you, {user?.name?.split(" ")[0]}.</h2><p>Your team information lives here. When a task plan is published, your next assignment will appear in this workspace.</p></div><span className="member-hero-mark">R</span></section>
+      <section className="stats-grid member-stats"><Stat label="My work unit" value={mySubunit?.name || "Unassigned"} note="Your current unit" icon="◇" /><Stat label="Team members" value={members.length} note="People in your unit" icon="◎" /><Stat label="Availability" value="Active" note="Eligible for assignment" icon="✓" /></section>
+      <section className="dashboard-grid member-grid"><div className="panel assignment-card"><PanelHeader title="Next assignment" /><div className="empty-assignment"><span>◷</span><h3>No published assignment yet</h3><p>Your next task and scheduled time will show here as soon as your team admin publishes the work plan.</p></div></div><div className="panel"><PanelHeader title="My teammates" action="View team" /><div className="people-list">{members.filter((member) => member.user?.id !== user?.id).slice(0, 4).map((member) => <PersonRow key={member.id} member={member} />)}{members.length <= 1 && <EmptyState copy="Your teammates will appear here." />}</div></div></section>
+    </div>
+  );
+}
+
+function Stat({ label, value, note, icon }) { return <article className="stat-card"><span className="stat-icon">{icon}</span><div><p>{label}</p><strong className={String(value).length > 10 ? "compact" : ""}>{value}</strong><small>{note}</small></div></article>; }
+function PanelHeader({ title, action, onAction }) { return <div className="panel-header"><h3>{title}</h3>{action && <button onClick={onAction}>{action} <span>→</span></button>}</div>; }
+function PersonRow({ member }) { return <div className="person-row"><span className="member-avatar">{initials(member.user?.name)}</span><div><strong>{member.user?.name || "Unnamed member"}</strong><small>{member.subunit?.name || "No unit"}</small></div><i className={member.isActive === false ? "inactive" : ""}>{member.isActive === false ? "Inactive" : "Active"}</i></div>; }
+function EmptyState({ copy }) { return <div className="compact-empty">{copy}</div>; }
+function PeopleView({ members, title, subtitle, token, isAdmin = false }) { const toggleStatus = async (member) => { try { const response = await fetch(`${import.meta.env.VITE_ROSTER_SERVICE_URL}/members/${member.id}`, { method: "PUT", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ isActive: member.isActive === false }) }); if (!response.ok) throw new Error(); window.location.reload(); } catch { window.alert("The member status could not be updated."); } }; return <section className="panel full-panel"><div className="view-heading"><div><p className="eyebrow">DIRECTORY</p><h2>{title}</h2><p>{subtitle}</p></div><label className="search-box"><span>⌕</span><input placeholder="Search members" aria-label="Search members" /></label></div><div className="member-table"><div className="table-head"><span>Member</span><span>Work unit</span><span>Status</span></div>{members.map((member) => <div className="table-row" key={member.id}><div><span className="member-avatar">{initials(member.user?.name)}</span><strong>{member.user?.name}</strong></div><span>{member.subunit?.name || "Unassigned"}</span>{isAdmin ? <button className={`member-status-button ${member.isActive === false ? "inactive" : ""}`} onClick={() => toggleStatus(member)}>{member.isActive === false ? "Activate" : "Deactivate"}</button> : <i className={member.isActive === false ? "inactive" : ""}>{member.isActive === false ? "Inactive" : "Active"}</i>}</div>)}</div></section>; }
+function ProfileView({ user, subunit }) { return <section className="panel full-panel profile-view"><div className="profile-hero"><span className="large-avatar">{initials(user?.name)}</span><div><p className="eyebrow">MY PROFILE</p><h2>{user?.name}</h2><p>{user?.email}</p></div></div><dl><div><dt>Role</dt><dd>Team member</dd></div><div><dt>Work unit</dt><dd>{subunit?.name || "Not assigned"}</dd></div><div><dt>Account status</dt><dd><i>Active</i></dd></div></dl></section>; }
+function DashboardSkeleton() { return <div className="skeleton-grid"><i /><i /><i /><i /><i /></div>; }

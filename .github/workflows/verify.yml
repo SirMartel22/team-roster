@@ -1,0 +1,25 @@
+name: Verify
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            auth-service/package-lock.json
+            roster-core-service/package-lock.json
+            notification-service/package-lock.json
+            client/package-lock.json
+      - run: npm ci --prefix auth-service
+      - run: npm ci --prefix roster-core-service
+      - run: npm ci --prefix notification-service
+      - run: npm ci --prefix client
+      - run: npm run verify

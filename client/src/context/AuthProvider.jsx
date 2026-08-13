@@ -65,7 +65,7 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   // Login function - calls auth-service's /login endpoint
-  const login = useCallback(async (email, password) => {
+  const login = useCallback(async (workspaceSlug, email, password) => {
     setIsLoading(true);
     setError(null);
     try {
@@ -74,7 +74,7 @@ export const AuthProvider = ({ children }) => {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password }),
+          body: JSON.stringify({ workspaceSlug, email, password }),
         },
       );
 

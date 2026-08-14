@@ -1,26 +1,26 @@
 import { useState, useContext } from 'react';
 import { AuthContext } from '../context/authContext';
+import { useToast } from '../context/toastContext';
 
 export const LoginForm = () => {
-  const { login, isLoading, error } = useContext(AuthContext);
+  const { login, isLoading } = useContext(AuthContext);
+  const toast = useToast();
   const [workspaceSlug, setWorkspaceSlug] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [localError, setLocalError] = useState(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLocalError(null);
-
     if (!workspaceSlug || !email || !password) {
-      setLocalError('Workspace, email and password are required');
+      toast.error('Workspace, email and password are required');
       return;
     }
 
     try {
       await login(workspaceSlug, email, password);
+      toast.success('Welcome back.');
     } catch (error) {
-      setLocalError(error.message);
+      toast.error(error.message);
     }
   };
 
@@ -33,9 +33,6 @@ export const LoginForm = () => {
           Access your teams, unit assignments, task plans and work schedules.
         </p>
       </div>
-
-      {error && <div className="auth-error">{error}</div>}
-      {localError && <div className="auth-error">{localError}</div>}
 
       <div className="auth-input-group">
         <label htmlFor="workspaceSlug">Workspace</label>

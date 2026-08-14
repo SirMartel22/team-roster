@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
+import { useToast } from "../context/toastContext";
 
 export function SignupForm({ onSignupComplete, invitationToken }) {
   const [fields, setFields] = useState({ churchId: "", subunitId: "", name: "", email: "", password: "", phone: "", whatsapp: "" });
   const [workspaceName, setWorkspaceName] = useState("");
   const [subunits, setSubunits] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState("");
+  const toast = useToast();
 
   const update = (event) => setFields((current) => ({ ...current, [event.target.name]: event.target.value }));
 
@@ -20,14 +21,16 @@ export function SignupForm({ onSignupComplete, invitationToken }) {
         setSubunits(workspace.subunits || []);
         setFields((current) => ({ ...current, churchId: workspace.id, email: data.invitation.email }));
       })
-      .catch((requestError) => setError(requestError.message));
-  }, [invitationToken]);
+      .catch((requestError) => toast.error(requestError.message));
+  }, [invitationToken, toast]);
 
   async function handleSubmit(event) {
     event.preventDefault();
-    setError("");
     const { churchId, subunitId, name, email, password, phone, whatsapp } = fields;
-    if (!churchId || !subunitId || !name || !email || !password) return setError("Please complete all required fields.");
+    if (![churchId, subunitId, name, email, password, phone, whatsapp].every((value) => value.trim())) {
+      toast.error("Please complete all required fields, including phone and WhatsApp numbers.");
+      return;
+    }
     setIsSubmitting(true);
     try {
       const registerResponse = await fetch(`${import.meta.env.VITE_AUTH_SERVICE_URL}/register`, {
@@ -39,13 +42,14 @@ export function SignupForm({ onSignupComplete, invitationToken }) {
 
       const memberResponse = await fetch(`${import.meta.env.VITE_ROSTER_SERVICE_URL}/members`, {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${registerData.token}` },
-        body: JSON.stringify({ subunitId, phone: phone || null, whatsapp: whatsapp || null }),
+        body: JSON.stringify({ subunitId, phone: phone.trim(), whatsapp: whatsapp.trim() }),
       });
       const memberData = await memberResponse.json();
       if (!memberResponse.ok) throw new Error(`Your account was created, but joining the team failed: ${memberData.message}`);
+      toast.success("Your account is ready. Sign in to continue.");
       onSignupComplete?.();
     } catch (requestError) {
-      setError(requestError.message);
+      toast.error(requestError.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -62,14 +66,13 @@ export function SignupForm({ onSignupComplete, invitationToken }) {
   return (
     <form onSubmit={handleSubmit} className="auth-form">
       <div className="auth-form-header"><p className="eyebrow">Member registration</p><h1>Join your organisation</h1><p className="auth-subtitle">Choose your organisation and work unit, then create your personal account.</p></div>
-      {error && <div className="auth-error" role="alert">{error}</div>}
       <div className="auth-form-row">
         <div className="auth-input-group"><label htmlFor="churchId">Organisation</label><input className="auth-input" id="churchId" value={workspaceName} readOnly /></div>
-        <div className="auth-input-group"><label htmlFor="subunitId">Work unit</label><select className="auth-input" id="subunitId" name="subunitId" value={fields.subunitId} onChange={update} disabled={!fields.churchId}><option value="">Select a unit</option>{subunits.map((subunit) => <option key={subunit.id} value={subunit.id}>{subunit.name}</option>)}</select></div>
+        <div className="auth-input-group"><label htmlFor="subunitId">Work unit</label><select className="auth-input" id="subunitId" name="subunitId" value={fields.subunitId} onChange={update} disabled={!fields.churchId} required><option value="">Select a unit</option>{subunits.map((subunit) => <option key={subunit.id} value={subunit.id}>{subunit.name}</option>)}</select></div>
       </div>
-      <div className="auth-input-group"><label htmlFor="memberName">Full name</label><input className="auth-input" id="memberName" name="name" value={fields.name} onChange={update} autoComplete="name" /></div>
-      <div className="auth-form-row"><div className="auth-input-group"><label htmlFor="memberEmail">Email</label><input className="auth-input" id="memberEmail" name="email" type="email" value={fields.email} onChange={update} readOnly={Boolean(invitationToken)} autoComplete="email" /></div><div className="auth-input-group"><label htmlFor="memberPassword">Password</label><input className="auth-input" id="memberPassword" name="password" type="password" value={fields.password} onChange={update} autoComplete="new-password" /></div></div>
-      <details className="optional-fields"><summary>Add contact details <span>Optional</span></summary><div className="auth-form-row"><div className="auth-input-group"><label htmlFor="phone">Phone</label><input className="auth-input" id="phone" name="phone" type="tel" value={fields.phone} onChange={update} /></div><div className="auth-input-group"><label htmlFor="whatsapp">WhatsApp</label><input className="auth-input" id="whatsapp" name="whatsapp" type="tel" value={fields.whatsapp} onChange={update} /></div></div></details>
+      <div className="auth-input-group"><label htmlFor="memberName">Full name</label><input className="auth-input" id="memberName" name="name" value={fields.name} onChange={update} autoComplete="name" required /></div>
+      <div className="auth-form-row"><div className="auth-input-group"><label htmlFor="memberEmail">Email</label><input className="auth-input" id="memberEmail" name="email" type="email" value={fields.email} onChange={update} readOnly={Boolean(invitationToken)} autoComplete="email" required /></div><div className="auth-input-group"><label htmlFor="memberPassword">Password</label><input className="auth-input" id="memberPassword" name="password" type="password" value={fields.password} onChange={update} autoComplete="new-password" required /></div></div>
+      <fieldset className="contact-fields"><legend>Required contact details</legend><p>Use numbers that can receive calls and WhatsApp messages, including the country code.</p><div className="auth-form-row"><div className="auth-input-group"><label htmlFor="phone">Phone number</label><input className="auth-input" id="phone" name="phone" type="tel" inputMode="tel" value={fields.phone} onChange={update} autoComplete="tel" placeholder="e.g. +234 801 234 5678" minLength="7" required /></div><div className="auth-input-group"><label htmlFor="whatsapp">WhatsApp number</label><input className="auth-input" id="whatsapp" name="whatsapp" type="tel" inputMode="tel" value={fields.whatsapp} onChange={update} autoComplete="tel" placeholder="e.g. +234 801 234 5678" minLength="7" required /></div></div></fieldset>
       <button className="auth-button" disabled={isSubmitting}>{isSubmitting ? "Creating account..." : "Join team"}</button>
     </form>
   );

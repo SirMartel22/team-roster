@@ -1,5 +1,6 @@
 import { useContext, useState } from "react";
 import { AuthProvider } from "./context/AuthProvider";
+import { ToastProvider } from "./context/ToastProvider";
 import { AuthContext } from "./context/authContext";
 import { LoginForm } from "./components/LoginForm";
 import { SignupForm } from "./components/SignupForm";
@@ -74,5 +75,5 @@ const AppContent = () => {
 };
 
 export default function App() {
-  return <AuthProvider><AppContent /></AuthProvider>;
+  return <ToastProvider><AuthProvider><AppContent /></AuthProvider></ToastProvider>;
 }

@@ -7,7 +7,6 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(null);
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState(null);
 
   // Ntracks whether we've finished checking localStorage for an
   // existing session yet. Prevents the app from briefly flashing the
@@ -67,7 +66,6 @@ export const AuthProvider = ({ children }) => {
   // Login function - calls auth-service's /login endpoint
   const login = useCallback(async (workspaceSlug, email, password) => {
     setIsLoading(true);
-    setError(null);
     try {
       const response = await fetch(
         `${import.meta.env.VITE_AUTH_SERVICE_URL}/login`,
@@ -91,9 +89,6 @@ export const AuthProvider = ({ children }) => {
       // Store the token and user info in state
       setToken(data.token);
       setUser(data.user);
-    } catch (error) {
-      setError(error.message);
-      throw error; //re-throw the error so the caller knows it failed
     } finally {
       setIsLoading(false);
     }
@@ -107,7 +102,6 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem("authToken");
     setToken(null);
     setUser(null);
-    setError(null);
   }, []);
 
   const value = {
@@ -115,7 +109,6 @@ export const AuthProvider = ({ children }) => {
     user,
     isLoading,
     isInitializing,
-    error,
     login,
     logout,
   };

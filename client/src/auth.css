@@ -30,9 +30,9 @@
 .auth-button:disabled { opacity: .6; cursor: wait; }
 .auth-toggle { margin-top: 24px; display: flex; align-items: center; justify-content: center; gap: 7px; color: var(--muted); font-size: 13px; }
 .auth-toggle button { padding: 0; background: transparent; color: var(--green); cursor: pointer; font-weight: 800; }
-.optional-fields { margin: 4px 0 16px; padding: 12px 14px 0; border: 1px solid var(--line); border-radius: 11px; }
-.optional-fields summary { padding-bottom: 12px; cursor: pointer; color: #39473f; font-size: 13px; font-weight: 700; }
-.optional-fields summary span { float: right; color: #8a938e; font-weight: 500; }
+.contact-fields { margin: 4px 0 16px; padding: 14px 14px 0; border: 1px solid var(--line); border-radius: 11px; }
+.contact-fields legend { padding: 0 6px; color: #39473f; font-size: 13px; font-weight: 800; }
+.contact-fields > p { margin: 0 0 13px; color: var(--muted); font-size: 11px; line-height: 1.45; }
 .form-footnote { margin: 14px 0 0; text-align: center; color: #89918d; font-size: 11px; }
 
 @media (max-width: 820px) {
@@ -43,3 +43,15 @@
   .auth-card-content { padding: 40px 28px; }
 }
 @media (max-width: 520px) { .auth-form-row { grid-template-columns: 1fr; gap: 0; } .auth-card-content { padding: 34px 20px; } }
+
+@media (max-width: 520px) {
+  .auth-page { padding: 62px 10px 16px; place-items: start center; }
+  .auth-back { left: 15px; top: 12px; }
+  .auth-layout { border-radius: 18px; }
+  .auth-card-content { padding: 30px 17px; }
+  .auth-form-header { margin-bottom: 22px; }
+  .auth-form-header h1 { font-size: 29px; }
+  .auth-subtitle { font-size: 13px; }
+  .contact-fields { padding-inline: 11px; }
+  .auth-toggle { flex-wrap: wrap; text-align: center; }
+}

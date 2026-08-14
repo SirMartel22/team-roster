@@ -106,6 +106,17 @@ paths:
         '200': { description: Tenant and role-scoped member list }
     post:
       security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [subunitId, phone, whatsapp]
+              properties:
+                subunitId: { type: string, format: uuid }
+                phone: { type: string, minLength: 7 }
+                whatsapp: { type: string, minLength: 7 }
       responses:
         '201': { description: Current user's member profile created }
   /duties:

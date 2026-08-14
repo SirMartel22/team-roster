@@ -29,9 +29,12 @@ const getMembers = async (req, res) => {
 const createMember = async (req, res) => {
   const { subunitId, phone, whatsapp } = req.body;
   const { userId, churchId, role } = req.user;
+  const phoneNumber = typeof phone === "string" ? phone.trim() : "";
+  const whatsappNumber = typeof whatsapp === "string" ? whatsapp.trim() : "";
 
   if (!subunitId) return res.status(400).json({ message: "subunitId is required" });
   if (role !== "member") return res.status(403).json({ message: "Admin accounts do not require member profiles" });
+  if (!phoneNumber || !whatsappNumber) return res.status(400).json({ message: "Phone and WhatsApp numbers are required" });
 
   try {
     const existing = await getRequestMember(userId);
@@ -41,7 +44,7 @@ const createMember = async (req, res) => {
     if (!subunit) return res.status(404).json({ message: "Subunit not found" });
 
     const member = await prisma.member.create({
-      data: { churchId, userId, subunitId, phone: phone || null, whatsapp: whatsapp || null },
+      data: { churchId, userId, subunitId, phone: phoneNumber, whatsapp: whatsappNumber },
       include: memberInclude,
     });
     await recordAudit({ churchId, actorUserId: userId, action: "member.created", entityType: "member", entityId: member.id });

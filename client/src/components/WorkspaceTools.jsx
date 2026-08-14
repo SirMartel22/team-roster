@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useToast } from "../context/toastContext";
 
 const serviceUrl = import.meta.env.VITE_ROSTER_SERVICE_URL;
 
@@ -16,10 +17,10 @@ async function request(path, token, options = {}) {
 const today = () => new Date().toISOString().slice(0, 10);
 
 export function UnitManagement({ token, subunits, members, onChanged }) {
+  const toast = useToast();
   const [duties, setDuties] = useState([]);
   const [name, setName] = useState("");
   const [dutyDrafts, setDutyDrafts] = useState({});
-  const [message, setMessage] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [editingUnit, setEditingUnit] = useState(null);
   const [renameName, setRenameName] = useState("");
@@ -29,31 +30,30 @@ export function UnitManagement({ token, subunits, members, onChanged }) {
   const [deleteError, setDeleteError] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const loadDuties = useCallback(() => request("/duties", token).then((data) => setDuties(data.duties || [])).catch((error) => setMessage(error.message)), [token]);
+  const loadDuties = useCallback(() => request("/duties", token).then((data) => setDuties(data.duties || [])).catch((error) => toast.error(error.message)), [token, toast]);
   useEffect(() => { loadDuties(); }, [loadDuties]);
 
   const createUnit = async (event) => {
     event.preventDefault();
     if (isCreating) return;
     setIsCreating(true);
-    setMessage("");
     try {
       const data = await request("/subunits", token, { method: "POST", body: JSON.stringify({ name }) });
-      setName(""); setMessage("Unit created."); onChanged?.({ type: "created", subunit: data.subunit });
-    } catch (error) { setMessage(error.message); }
+      setName(""); toast.success("Unit created."); onChanged?.({ type: "created", subunit: data.subunit });
+    } catch (error) { toast.error(error.message); }
     finally { setIsCreating(false); }
   };
 
   const createDuty = async (subunitId) => {
     try {
       await request("/duties", token, { method: "POST", body: JSON.stringify({ subunitId, name: dutyDrafts[subunitId] }) });
-      setDutyDrafts((current) => ({ ...current, [subunitId]: "" })); setMessage("Duty created."); loadDuties();
-    } catch (error) { setMessage(error.message); }
+      setDutyDrafts((current) => ({ ...current, [subunitId]: "" })); toast.success("Duty created."); loadDuties();
+    } catch (error) { toast.error(error.message); }
   };
 
   const removeDuty = async (id) => {
-    try { await request(`/duties/${id}`, token, { method: "DELETE" }); loadDuties(); }
-    catch (error) { setMessage(error.message); }
+    try { await request(`/duties/${id}`, token, { method: "DELETE" }); toast.success("Duty deleted."); loadDuties(); }
+    catch (error) { toast.error(error.message); }
   };
   const openRenameModal = (subunit) => {
     setEditingUnit(subunit);
@@ -75,10 +75,10 @@ export function UnitManagement({ token, subunits, members, onChanged }) {
     try {
       const data = await request(`/subunits/${editingUnit.id}`, token, { method: "PUT", body: JSON.stringify({ name: nextName }) });
       onChanged?.({ type: "updated", subunit: data.subunit });
-      setMessage("Unit renamed.");
+      toast.success("Unit renamed.");
       setEditingUnit(null);
       setRenameName("");
-    } catch (error) { setRenameError(error.message); }
+    } catch (error) { setRenameError(error.message); toast.error(error.message); }
     finally { setIsRenaming(false); }
   };
   const openDeleteModal = (subunit) => {
@@ -97,15 +97,14 @@ export function UnitManagement({ token, subunits, members, onChanged }) {
     try {
       await request(`/subunits/${deletingUnit.id}`, token, { method: "DELETE" });
       onChanged?.({ type: "deleted", id: deletingUnit.id });
-      setMessage("Unit deleted.");
+      toast.success("Unit deleted.");
       setDeletingUnit(null);
-    } catch (error) { setDeleteError(error.message); }
+    } catch (error) { setDeleteError(error.message); toast.error(error.message); }
     finally { setIsDeleting(false); }
   };
 
   return <section className="workspace-tool">
     <div className="view-heading standalone"><div><p className="eyebrow">STRUCTURE</p><h2>Work units and duties</h2><p>Configure the people groups and responsibilities used by the scheduler.</p></div></div>
-    {message && <p className="tool-message">{message}</p>}
     <form className="inline-tool-form" onSubmit={createUnit} aria-busy={isCreating}><input value={name} onChange={(event) => setName(event.target.value)} placeholder="New work unit" required disabled={isCreating} /><button disabled={isCreating || !name.trim()}>{isCreating ? "Creating…" : "Create unit"}</button></form>
     <div className="subunit-grid">{subunits.map((subunit) => {
       const unitDuties = duties.filter((duty) => duty.subunitId === subunit.id);
@@ -140,44 +139,43 @@ export function UnitManagement({ token, subunits, members, onChanged }) {
 }
 
 export function RosterPlanner({ token, members }) {
+  const toast = useToast();
   const [date, setDate] = useState(today());
   const [entries, setEntries] = useState([]);
   const [generationResults, setGenerationResults] = useState([]);
-  const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     try { const data = await request(`/rosters?date=${date}`, token); setEntries(data.rosterEntries || []); }
-    catch (error) { setMessage(error.message); }
-  }, [date, token]);
+    catch (error) { toast.error(error.message); }
+  }, [date, token, toast]);
   useEffect(() => {
     request(`/rosters?date=${date}`, token)
       .then((data) => setEntries(data.rosterEntries || []))
-      .catch((error) => setMessage(error.message));
-  }, [date, token]);
+      .catch((error) => toast.error(error.message));
+  }, [date, token, toast]);
 
   const act = async (action) => {
-    setBusy(true); setMessage("");
+    setBusy(true);
     try {
       const data = await request(`/rosters/${action}`, token, { method: "POST", body: JSON.stringify({ serviceDate: date }) });
       if (action === "generate") setGenerationResults(data.results || []);
-      setMessage(data.message); await load();
-    } catch (error) { setMessage(error.message); }
+      toast.success(data.message); await load();
+    } catch (error) { toast.error(error.message); }
     finally { setBusy(false); }
   };
 
   const reassign = async (entryId, memberId) => {
-    try { await request(`/rosters/${entryId}/assignment`, token, { method: "PATCH", body: JSON.stringify({ memberId }) }); await load(); }
-    catch (error) { setMessage(error.message); }
+    try { await request(`/rosters/${entryId}/assignment`, token, { method: "PATCH", body: JSON.stringify({ memberId }) }); toast.success("Assignment updated."); await load(); }
+    catch (error) { toast.error(error.message); }
   };
   const attendance = async (entryId, attended) => {
-    try { await request(`/rosters/${entryId}/attendance`, token, { method: "PATCH", body: JSON.stringify({ attended }) }); await load(); }
-    catch (error) { setMessage(error.message); }
+    try { await request(`/rosters/${entryId}/attendance`, token, { method: "PATCH", body: JSON.stringify({ attended }) }); toast.success("Attendance updated."); await load(); }
+    catch (error) { toast.error(error.message); }
   };
 
   return <section className="panel full-panel workspace-tool"><div className="view-heading"><div><p className="eyebrow">TASK PLANNING</p><h2>Generate, review and publish</h2><p>Assignments remain drafts until you explicitly publish them.</p></div></div>
     <div className="planner-actions"><input type="date" value={date} onChange={(event) => setDate(event.target.value)} /><button onClick={() => act("generate")} disabled={busy}>Generate draft</button><button className="publish-button" onClick={() => act("publish")} disabled={busy || !entries.length}>Publish roster</button></div>
-    {message && <p className="tool-message">{message}</p>}
     {generationResults.filter((result) => result.status !== "assigned" || result.fairnessWarning).map((result) => <p className="tool-warning" key={result.duty.id}>{result.duty.name}: {result.reason || result.fairnessWarning}</p>)}
     <div className="roster-table">{entries.map((entry) => {
       const eligible = members.filter((member) => member.subunitId === entry.duty.subunitId && member.isActive !== false);
@@ -190,40 +188,46 @@ export function RosterPlanner({ token, members }) {
 }
 
 export function MemberAssignments({ token }) {
+  const toast = useToast();
   const [date, setDate] = useState(today());
   const [entries, setEntries] = useState([]);
-  const [message, setMessage] = useState("");
-  useEffect(() => { request(`/rosters?date=${date}`, token).then((data) => setEntries(data.rosterEntries || [])).catch((error) => setMessage(error.message)); }, [date, token]);
-  return <section className="panel full-panel workspace-tool"><div className="view-heading"><div><p className="eyebrow">MY SCHEDULE</p><h2>Published assignments</h2><p>Choose a service date to view your assignment.</p></div><input type="date" value={date} onChange={(event) => setDate(event.target.value)} /></div>{message && <p className="tool-message">{message}</p>}<div className="roster-table">{entries.map((entry) => <div className="roster-row" key={entry.id}><div><strong>{entry.duty.name}</strong><small>{entry.duty.subunit.name}</small></div><span className="status-pill">Published</span></div>)}{!entries.length && <p className="compact-empty">No published assignment for this date.</p>}</div></section>;
+  useEffect(() => { request(`/rosters?date=${date}`, token).then((data) => setEntries(data.rosterEntries || [])).catch((error) => toast.error(error.message)); }, [date, token, toast]);
+  return <section className="panel full-panel workspace-tool"><div className="view-heading"><div><p className="eyebrow">MY SCHEDULE</p><h2>Published assignments</h2><p>Choose a service date to view your assignment.</p></div><input type="date" value={date} onChange={(event) => setDate(event.target.value)} /></div><div className="roster-table">{entries.map((entry) => <div className="roster-row" key={entry.id}><div><strong>{entry.duty.name}</strong><small>{entry.duty.subunit.name}</small></div><span className="status-pill">Published</span></div>)}{!entries.length && <p className="compact-empty">No published assignment for this date.</p>}</div></section>;
 }
 
 export function RequestsView({ token, isAdmin, subunits }) {
+  const toast = useToast();
   const [requests, setRequests] = useState([]);
   const [invitations, setInvitations] = useState([]);
   const [target, setTarget] = useState("");
   const [email, setEmail] = useState("");
-  const [message, setMessage] = useState("");
   const load = useCallback(async () => {
     try {
       const data = await request("/subunit-switch-requests", token); setRequests(data.requests || []);
       if (isAdmin) { const inviteData = await request("/invitations", token); setInvitations(inviteData.invitations || []); }
-    } catch (error) { setMessage(error.message); }
-  }, [token, isAdmin]);
+    } catch (error) { toast.error(error.message); }
+  }, [token, isAdmin, toast]);
   useEffect(() => {
     request("/subunit-switch-requests", token)
       .then((data) => setRequests(data.requests || []))
-      .catch((error) => setMessage(error.message));
+      .catch((error) => toast.error(error.message));
     if (isAdmin) {
       request("/invitations", token)
         .then((data) => setInvitations(data.invitations || []))
-        .catch((error) => setMessage(error.message));
+        .catch((error) => toast.error(error.message));
     }
-  }, [token, isAdmin]);
-  const submitSwitch = async () => { try { const data = await request("/subunit-switch-requests", token, { method: "POST", body: JSON.stringify({ toSubunitId: target }) }); setMessage(data.message); load(); } catch (error) { setMessage(error.message); } };
-  const decide = async (id, status) => { try { await request(`/subunit-switch-requests/${id}`, token, { method: "PATCH", body: JSON.stringify({ status }) }); load(); } catch (error) { setMessage(error.message); } };
-  const invite = async (event) => { event.preventDefault(); try { const data = await request("/invitations", token, { method: "POST", body: JSON.stringify({ email }) }); setEmail(""); setMessage(`Invitation ready: ${data.inviteUrl}`); load(); } catch (error) { setMessage(error.message); } };
-  const invitationAction = async (id, action) => { try { const data = await request(`/invitations/${id}${action === "resend" ? "/resend" : ""}`, token, { method: action === "revoke" ? "DELETE" : "POST" }); setMessage(data.inviteUrl ? `Invitation ready: ${data.inviteUrl}` : data.message); load(); } catch (error) { setMessage(error.message); } };
-  return <section className="panel full-panel workspace-tool"><div className="view-heading"><div><p className="eyebrow">REQUESTS</p><h2>{isAdmin ? "Membership requests and invitations" : "Change work unit"}</h2></div></div>{message && <p className="tool-message break-all">{message}</p>}
+  }, [token, isAdmin, toast]);
+  const reportInvitation = (data) => {
+    const delivery = data.notification?.data?.result;
+    if (data.notification?.status === "processed" && ["sent", "already_sent"].includes(delivery?.status)) toast.success("Invitation created and email sent.");
+    else if (data.notification?.status === "failed" || delivery?.status === "failed") toast.error(`Invitation created, but the email was not sent: ${delivery?.error || data.notification?.message || "Notification delivery failed"}`);
+    else toast.warning("Invitation created, but email delivery is still pending. The invitation remains available in the list.");
+  };
+  const submitSwitch = async () => { try { const data = await request("/subunit-switch-requests", token, { method: "POST", body: JSON.stringify({ toSubunitId: target }) }); toast.success(data.message); load(); } catch (error) { toast.error(error.message); } };
+  const decide = async (id, status) => { try { await request(`/subunit-switch-requests/${id}`, token, { method: "PATCH", body: JSON.stringify({ status }) }); toast.success(`Request ${status}.`); load(); } catch (error) { toast.error(error.message); } };
+  const invite = async (event) => { event.preventDefault(); try { const data = await request("/invitations", token, { method: "POST", body: JSON.stringify({ email }) }); setEmail(""); reportInvitation(data); load(); } catch (error) { toast.error(error.message); } };
+  const invitationAction = async (id, action) => { try { const data = await request(`/invitations/${id}${action === "resend" ? "/resend" : ""}`, token, { method: action === "revoke" ? "DELETE" : "POST" }); if (action === "resend") reportInvitation(data); else toast.success(data.message); load(); } catch (error) { toast.error(error.message); } };
+  return <section className="panel full-panel workspace-tool"><div className="view-heading"><div><p className="eyebrow">REQUESTS</p><h2>{isAdmin ? "Membership requests and invitations" : "Change work unit"}</h2></div></div>
     {!isAdmin && <div className="planner-actions"><select value={target} onChange={(event) => setTarget(event.target.value)}><option value="">Choose a new unit</option>{subunits.map((unit) => <option key={unit.id} value={unit.id}>{unit.name}</option>)}</select><button disabled={!target} onClick={submitSwitch}>Submit request</button></div>}
     {isAdmin && <form className="inline-tool-form" onSubmit={invite}><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Member email" required /><button>Generate invitation</button></form>}
     <h3>Unit switch requests</h3><div className="request-list">{requests.map((item) => <div key={item.id} className="request-row"><div><strong>{item.member?.user?.name || "My request"}</strong><small>{item.fromSubunit.name} → {item.toSubunit.name}</small></div><span className="status-pill">{item.status}</span>{isAdmin && item.status === "pending" && <div><button onClick={() => decide(item.id, "approved")}>Approve</button><button onClick={() => decide(item.id, "rejected")}>Reject</button></div>}</div>)}{!requests.length && <p className="compact-empty">No requests yet.</p>}</div>
@@ -232,9 +236,9 @@ export function RequestsView({ token, isAdmin, subunits }) {
 }
 
 export function PerformanceView({ token, member }) {
+  const toast = useToast();
   const [performance, setPerformance] = useState(null);
-  const [message, setMessage] = useState("");
-  useEffect(() => { if (member?.id) request(`/members/${member.id}/performance`, token).then((data) => setPerformance(data.performance)).catch((error) => setMessage(error.message)); }, [member?.id, token]);
+  useEffect(() => { if (member?.id) request(`/members/${member.id}/performance`, token).then((data) => setPerformance(data.performance)).catch((error) => toast.error(error.message)); }, [member?.id, token, toast]);
   const cards = useMemo(() => performance ? [["Published", performance.totalPublishedAssignments], ["Attended", performance.attended], ["Missed", performance.missed], ["Attendance rate", performance.attendanceRate === null ? "Not available" : `${performance.attendanceRate}%`]] : [], [performance]);
-  return <section className="panel full-panel workspace-tool"><div className="view-heading"><div><p className="eyebrow">PERFORMANCE</p><h2>My attendance</h2><p>Unmarked assignments are never counted as absences.</p></div></div>{message && <p className="tool-message">{message}</p>}<div className="stats-grid">{cards.map(([label, value]) => <article className="stat-card" key={label}><div><p>{label}</p><strong>{value}</strong></div></article>)}</div></section>;
+  return <section className="panel full-panel workspace-tool"><div className="view-heading"><div><p className="eyebrow">PERFORMANCE</p><h2>My attendance</h2><p>Unmarked assignments are never counted as absences.</p></div></div><div className="stats-grid">{cards.map(([label, value]) => <article className="stat-card" key={label}><div><p>{label}</p><strong>{value}</strong></div></article>)}</div></section>;
 }

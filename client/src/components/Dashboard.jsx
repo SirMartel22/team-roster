@@ -1,5 +1,6 @@
 import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { AuthContext } from "../context/authContext";
+import { useToast } from "../context/toastContext";
 import "../dashboard.css";
 import { MemberAssignments, PerformanceView, RequestsView, RosterPlanner, UnitManagement } from "./WorkspaceTools";
 
@@ -15,11 +16,11 @@ function Icon({ name }) {
 
 export function Dashboard() {
   const { user, token, logout } = useContext(AuthContext);
+  const toast = useToast();
   const [members, setMembers] = useState([]);
   const [subunits, setSubunits] = useState([]);
   const [activeView, setActiveView] = useState(user?.role === "admin" ? "Overview" : "My overview");
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const isAdmin = user?.role === "admin";
 
@@ -36,9 +37,9 @@ export function Dashboard() {
         setMembers(membersData.members || []);
         setSubunits(subunitsData.subunits || []);
       })
-      .catch((requestError) => setError(requestError.message))
+      .catch((requestError) => toast.error(requestError.message))
       .finally(() => setLoading(false));
-  }, [token, user?.churchId]);
+  }, [token, user?.churchId, toast]);
 
   const myMember = useMemo(() => members.find((member) => member.user?.id === user?.id) || members[0], [members, user?.id]);
   const mySubunit = myMember?.subunit;
@@ -55,7 +56,16 @@ export function Dashboard() {
     });
   }, []);
 
+  const handleMemberChanged = useCallback((changedMember) => {
+    setMembers((current) => current.map((member) => member.id === changedMember.id ? changedMember : member));
+  }, []);
+
   const changeView = (view) => { setActiveView(view); setMobileNavOpen(false); };
+  const openPlanner = () => {
+    changeView("Schedule");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    toast.info("Planning tools opened.");
+  };
 
   return (
     <div className="dashboard-page">
@@ -73,16 +83,16 @@ export function Dashboard() {
           <button className="profile-button" onClick={logout}><span className="member-avatar">{initials(user?.name)}</span><span><strong>{user?.name}</strong><small>{isAdmin ? "Administrator" : mySubunit?.name || "Team member"}</small></span><b title="Sign out">→</b></button>
         </div>
       </aside>
+      {mobileNavOpen && <button type="button" className="sidebar-scrim" onClick={() => setMobileNavOpen(false)} aria-label="Close navigation" />}
 
       <main className="dashboard-main">
         <header className="dashboard-header">
           <div><button className="mobile-menu" onClick={() => setMobileNavOpen((open) => !open)} aria-label="Toggle navigation">☰</button><p>{new Intl.DateTimeFormat("en-NG", { weekday: "long", day: "numeric", month: "long" }).format(new Date())}</p><h1>{activeView}</h1></div>
-          <div className="dashboard-actions"><button className="icon-button" aria-label="Notifications">○<span /></button>{isAdmin && <button className="primary-action" onClick={() => changeView("Schedule")}>Plan work <span>→</span></button>}</div>
+          <div className="dashboard-actions"><button type="button" className="icon-button" aria-label="Notifications" title="Notifications" onClick={() => toast.info("You have no new notifications.")}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg></button>{isAdmin && <button type="button" className="primary-action" onClick={openPlanner}>Plan work <span>→</span></button>}</div>
         </header>
 
-        {error && <div className="dashboard-error">{error}<button onClick={() => window.location.reload()}>Try again</button></div>}
         {loading ? <DashboardSkeleton /> : isAdmin ? (
-          <AdminContent view={activeView} members={members} activeMembers={activeMembers} subunits={subunits} onNavigate={changeView} token={token} onChanged={handleSubunitChanged} />
+          <AdminContent view={activeView} members={members} activeMembers={activeMembers} subunits={subunits} onNavigate={changeView} token={token} onChanged={handleSubunitChanged} onMemberChanged={handleMemberChanged} />
         ) : (
           <MemberContent view={activeView} members={members} user={user} mySubunit={mySubunit} myMember={myMember} subunits={subunits} token={token} />
         )}
@@ -91,8 +101,8 @@ export function Dashboard() {
   );
 }
 
-function AdminContent({ view, members, activeMembers, subunits, onNavigate, token, onChanged }) {
-  if (view === "Members") return <PeopleView members={members} title="All members" subtitle="Everyone working across your organisation's units." token={token} isAdmin />;
+function AdminContent({ view, members, activeMembers, subunits, onNavigate, token, onChanged, onMemberChanged }) {
+  if (view === "Members") return <PeopleView members={members} title="All members" subtitle="Everyone working across your organisation's units." token={token} isAdmin onMemberChanged={onMemberChanged} />;
   if (view === "Units") return <UnitManagement token={token} subunits={subunits} members={members} onChanged={onChanged} />;
   if (view === "Schedule") return <RosterPlanner token={token} members={members} />;
   if (view === "Requests") return <RequestsView token={token} isAdmin subunits={subunits} />;
@@ -127,6 +137,18 @@ function Stat({ label, value, note, icon }) { return <article className="stat-ca
 function PanelHeader({ title, action, onAction }) { return <div className="panel-header"><h3>{title}</h3>{action && <button onClick={onAction}>{action} <span>→</span></button>}</div>; }
 function PersonRow({ member }) { return <div className="person-row"><span className="member-avatar">{initials(member.user?.name)}</span><div><strong>{member.user?.name || "Unnamed member"}</strong><small>{member.subunit?.name || "No unit"}</small></div><i className={member.isActive === false ? "inactive" : ""}>{member.isActive === false ? "Inactive" : "Active"}</i></div>; }
 function EmptyState({ copy }) { return <div className="compact-empty">{copy}</div>; }
-function PeopleView({ members, title, subtitle, token, isAdmin = false }) { const toggleStatus = async (member) => { try { const response = await fetch(`${import.meta.env.VITE_ROSTER_SERVICE_URL}/members/${member.id}`, { method: "PUT", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ isActive: member.isActive === false }) }); if (!response.ok) throw new Error(); window.location.reload(); } catch { window.alert("The member status could not be updated."); } }; return <section className="panel full-panel"><div className="view-heading"><div><p className="eyebrow">DIRECTORY</p><h2>{title}</h2><p>{subtitle}</p></div><label className="search-box"><span>⌕</span><input placeholder="Search members" aria-label="Search members" /></label></div><div className="member-table"><div className="table-head"><span>Member</span><span>Work unit</span><span>Status</span></div>{members.map((member) => <div className="table-row" key={member.id}><div><span className="member-avatar">{initials(member.user?.name)}</span><strong>{member.user?.name}</strong></div><span>{member.subunit?.name || "Unassigned"}</span>{isAdmin ? <button className={`member-status-button ${member.isActive === false ? "inactive" : ""}`} onClick={() => toggleStatus(member)}>{member.isActive === false ? "Activate" : "Deactivate"}</button> : <i className={member.isActive === false ? "inactive" : ""}>{member.isActive === false ? "Inactive" : "Active"}</i>}</div>)}</div></section>; }
+function PeopleView({ members, title, subtitle, token, isAdmin = false, onMemberChanged }) {
+  const toast = useToast();
+  const toggleStatus = async (member) => {
+    try {
+      const response = await fetch(`${import.meta.env.VITE_ROSTER_SERVICE_URL}/members/${member.id}`, { method: "PUT", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ isActive: member.isActive === false }) });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || "The member status could not be updated.");
+      onMemberChanged?.(data.member);
+      toast.success(`${member.user?.name || "Member"} is now ${data.member.isActive === false ? "inactive" : "active"}.`);
+    } catch (error) { toast.error(error.message); }
+  };
+  return <section className="panel full-panel"><div className="view-heading"><div><p className="eyebrow">DIRECTORY</p><h2>{title}</h2><p>{subtitle}</p></div><label className="search-box"><span>⌕</span><input placeholder="Search members" aria-label="Search members" /></label></div><div className="member-table"><div className="table-head"><span>Member</span><span>Work unit</span><span>Status</span></div>{members.map((member) => <div className="table-row" key={member.id}><div><span className="member-avatar">{initials(member.user?.name)}</span><strong>{member.user?.name}</strong></div><span>{member.subunit?.name || "Unassigned"}</span>{isAdmin ? <button className={`member-status-button ${member.isActive === false ? "inactive" : ""}`} onClick={() => toggleStatus(member)}>{member.isActive === false ? "Activate" : "Deactivate"}</button> : <i className={member.isActive === false ? "inactive" : ""}>{member.isActive === false ? "Inactive" : "Active"}</i>}</div>)}</div></section>;
+}
 function ProfileView({ user, subunit }) { return <section className="panel full-panel profile-view"><div className="profile-hero"><span className="large-avatar">{initials(user?.name)}</span><div><p className="eyebrow">MY PROFILE</p><h2>{user?.name}</h2><p>{user?.email}</p></div></div><dl><div><dt>Role</dt><dd>Team member</dd></div><div><dt>Work unit</dt><dd>{subunit?.name || "Not assigned"}</dd></div><div><dt>Account status</dt><dd><i>Active</i></dd></div></dl></section>; }
 function DashboardSkeleton() { return <div className="skeleton-grid"><i /><i /><i /><i /><i /></div>; }

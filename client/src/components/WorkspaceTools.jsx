@@ -25,6 +25,9 @@ export function UnitManagement({ token, subunits, members, onChanged }) {
   const [renameName, setRenameName] = useState("");
   const [renameError, setRenameError] = useState("");
   const [isRenaming, setIsRenaming] = useState(false);
+  const [deletingUnit, setDeletingUnit] = useState(null);
+  const [deleteError, setDeleteError] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const loadDuties = useCallback(() => request("/duties", token).then((data) => setDuties(data.duties || [])).catch((error) => setMessage(error.message)), [token]);
   useEffect(() => { loadDuties(); }, [loadDuties]);
@@ -78,10 +81,26 @@ export function UnitManagement({ token, subunits, members, onChanged }) {
     } catch (error) { setRenameError(error.message); }
     finally { setIsRenaming(false); }
   };
-  const removeUnit = async (subunit) => {
-    if (!window.confirm(`Delete ${subunit.name}? This works only when it has no members, duties, or requests.`)) return;
-    try { await request(`/subunits/${subunit.id}`, token, { method: "DELETE" }); onChanged?.({ type: "deleted", id: subunit.id }); }
-    catch (error) { setMessage(error.message); }
+  const openDeleteModal = (subunit) => {
+    setDeletingUnit(subunit);
+    setDeleteError("");
+  };
+  const closeDeleteModal = () => {
+    if (isDeleting) return;
+    setDeletingUnit(null);
+    setDeleteError("");
+  };
+  const removeUnit = async () => {
+    if (!deletingUnit || isDeleting) return;
+    setIsDeleting(true);
+    setDeleteError("");
+    try {
+      await request(`/subunits/${deletingUnit.id}`, token, { method: "DELETE" });
+      onChanged?.({ type: "deleted", id: deletingUnit.id });
+      setMessage("Unit deleted.");
+      setDeletingUnit(null);
+    } catch (error) { setDeleteError(error.message); }
+    finally { setIsDeleting(false); }
   };
 
   return <section className="workspace-tool">
@@ -91,7 +110,7 @@ export function UnitManagement({ token, subunits, members, onChanged }) {
     <div className="subunit-grid">{subunits.map((subunit) => {
       const unitDuties = duties.filter((duty) => duty.subunitId === subunit.id);
       const count = members.filter((member) => member.subunitId === subunit.id).length;
-      return <article key={subunit.id} className="subunit-card tool-card"><div className="tool-card-heading"><h3>{subunit.name}</h3><div><button onClick={() => openRenameModal(subunit)}>Rename</button><button onClick={() => removeUnit(subunit)}>Delete</button></div></div><p>{count} {count === 1 ? "member" : "members"}</p>
+      return <article key={subunit.id} className="subunit-card tool-card"><div className="tool-card-heading"><h3>{subunit.name}</h3><div><button onClick={() => openRenameModal(subunit)}>Rename</button><button onClick={() => openDeleteModal(subunit)}>Delete</button></div></div><p>{count} {count === 1 ? "member" : "members"}</p>
         <ul className="duty-list">{unitDuties.map((duty) => <li key={duty.id}><span>{duty.name}</span><button onClick={() => removeDuty(duty.id)} aria-label={`Delete ${duty.name}`}>×</button></li>)}</ul>
         <div className="inline-tool-form compact"><input value={dutyDrafts[subunit.id] || ""} onChange={(event) => setDutyDrafts((current) => ({ ...current, [subunit.id]: event.target.value }))} placeholder="Add duty" /><button type="button" onClick={() => createDuty(subunit.id)} disabled={!dutyDrafts[subunit.id]?.trim()}>Add</button></div>
       </article>;
@@ -106,6 +125,15 @@ export function UnitManagement({ token, subunits, members, onChanged }) {
           {renameError && <p className="modal-error" role="alert">{renameError}</p>}
           <div className="rename-modal-actions"><button type="button" className="secondary-button" onClick={closeRenameModal} disabled={isRenaming}>Cancel</button><button type="submit" className="primary-button" disabled={isRenaming || !renameName.trim() || renameName.trim() === editingUnit.name}>{isRenaming ? "Renaming…" : "Save changes"}</button></div>
         </form>
+      </div>
+    </div>}
+    {deletingUnit && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeDeleteModal(); }}>
+      <div className="rename-modal delete-modal" role="alertdialog" aria-modal="true" aria-labelledby="delete-unit-title" aria-describedby="delete-unit-description">
+        <div className="delete-warning-icon" aria-hidden="true">!</div>
+        <div className="rename-modal-header"><div><p className="eyebrow">PERMANENT ACTION</p><h2 id="delete-unit-title">Delete {deletingUnit.name}?</h2></div><button type="button" className="modal-close" onClick={closeDeleteModal} disabled={isDeleting} aria-label="Close delete dialog">×</button></div>
+        <p className="rename-modal-copy" id="delete-unit-description">This unit will be permanently removed. You can only delete a unit that has no members, duties, or pending requests.</p>
+        {deleteError && <p className="modal-error" role="alert">{deleteError}</p>}
+        <div className="rename-modal-actions"><button type="button" className="secondary-button" onClick={closeDeleteModal} disabled={isDeleting}>Keep unit</button><button type="button" className="danger-button" onClick={removeUnit} disabled={isDeleting}>{isDeleting ? "Deleting…" : "Delete unit"}</button></div>
       </div>
     </div>}
   </section>;

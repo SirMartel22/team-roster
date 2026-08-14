@@ -1,4 +1,4 @@
-import { useContext, useEffect, useMemo, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { AuthContext } from "../context/authContext";
 import "../dashboard.css";
 import { MemberAssignments, PerformanceView, RequestsView, RosterPlanner, UnitManagement } from "./WorkspaceTools";
@@ -45,6 +45,16 @@ export function Dashboard() {
   const navigation = isAdmin ? adminNav : memberNav;
   const activeMembers = members.filter((member) => member.isActive !== false);
 
+  const handleSubunitChanged = useCallback((change) => {
+    setSubunits((current) => {
+      let next = current;
+      if (change?.type === "created" && change.subunit) next = [...current, change.subunit];
+      if (change?.type === "updated" && change.subunit) next = current.map((unit) => unit.id === change.subunit.id ? change.subunit : unit);
+      if (change?.type === "deleted" && change.id) next = current.filter((unit) => unit.id !== change.id);
+      return [...next].sort((left, right) => left.name.localeCompare(right.name));
+    });
+  }, []);
+
   const changeView = (view) => { setActiveView(view); setMobileNavOpen(false); };
 
   return (
@@ -72,7 +82,7 @@ export function Dashboard() {
 
         {error && <div className="dashboard-error">{error}<button onClick={() => window.location.reload()}>Try again</button></div>}
         {loading ? <DashboardSkeleton /> : isAdmin ? (
-          <AdminContent view={activeView} members={members} activeMembers={activeMembers} subunits={subunits} onNavigate={changeView} token={token} onChanged={() => window.location.reload()} />
+          <AdminContent view={activeView} members={members} activeMembers={activeMembers} subunits={subunits} onNavigate={changeView} token={token} onChanged={handleSubunitChanged} />
         ) : (
           <MemberContent view={activeView} members={members} user={user} mySubunit={mySubunit} myMember={myMember} subunits={subunits} token={token} />
         )}

@@ -1,6 +1,6 @@
 # Member Guide
 
-1. Open an invitation link or choose **Join an existing team**.
+1. Open the single-use invitation link sent by your organisation administrator. Direct public registration is disabled.
 2. Create the account and select a work unit. Use the workspace slug when signing in later.
 3. **My team** shows members in your current unit.
 4. **Assignments** shows only your published assignment for a selected date.

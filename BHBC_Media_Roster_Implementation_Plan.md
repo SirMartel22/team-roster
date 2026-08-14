@@ -4,7 +4,7 @@
 **Source:** `BHBC_Media_Roster_Project_Status.md` reconciled with the current repository  
 **Purpose:** Review and approve the next implementation sequence before feature work resumes
 
-**Local implementation status:** Core roadmap implementation completed on August 13, 2026. Tenant-aware auth, authorization hardening, roster planning, invitations, switch requests, attendance/performance, reliable notifications, migrations, tests, CI, and operating documentation are implemented in the working tree. Database migration, staging acceptance, production configuration, backup validation, and deployment remain controlled operational steps.
+**Local implementation status (updated August 14, 2026):** Core roadmap features are implemented. The authentication stabilization pass repaired fresh login and workspace creation, made workspace/admin creation transactional, made invited registration and invitation consumption transactional, removed public organisation/subunit enumeration, and added controller regression tests. Local automated verification passes, but database migration, database-backed two-tenant acceptance, production configuration, backup validation, and deployment remain controlled operational steps. The MVP is implementation-complete locally but is not release-approved until those operational gates pass.
 
 ---
 
@@ -74,7 +74,7 @@ Alternative: make email globally unique. This is simpler but prevents separate a
 
 **Recommended MVP approach:** `/register` creates the user and returns a JWT; authenticated `POST /members` derives `userId` and `churchId` exclusively from that JWT. If profile creation fails, the client presents a resumable “complete profile” step.
 
-Later, invitation acceptance can be moved into a database function or another transactional workflow. The immediate approach preserves service boundaries and fixes the broken client flow without pretending two HTTP services share an atomic transaction.
+Invitation acceptance and user creation use a database function so the invitation is validated, consumed, and associated with the new member account in one transaction. Workspace and first-admin creation use the same transactional pattern.
 
 ### Decision C — API naming convention
 
@@ -133,7 +133,7 @@ Acceptance criteria:
 
 #### 1.3 Safe registration and member-profile creation
 
-- Ignore or reject client-supplied `role`; public registration always creates a member.
+- Ignore or reject client-supplied `role`; invitation registration always creates a member.
 - Return a JWT after successful registration.
 - Send that token when creating the member profile.
 - In `POST /members`, derive `userId` and `churchId` from `req.user`, not the body.
@@ -147,8 +147,8 @@ Apply the following policy:
 | Endpoint/action | Admin | Member | Public |
 |---|---:|---:|---:|
 | Create workspace and first admin | No existing token required | No existing token required | Yes, rate-limited |
-| Register into an organisation | No | No | Temporarily yes; invitation-only later |
-| List public onboarding choices | No | No | Temporary, minimal fields only |
+| Register into an organisation | No | No | Invitation token required |
+| List public onboarding choices | No | No | No; invitation lookup returns only its workspace and units |
 | Create/update/delete subunits | Yes | No | No |
 | Create/delete duties | Yes | No | No |
 | Generate/publish roster | Yes | No | No |
@@ -423,7 +423,7 @@ This slice should be reviewed and merged before modifying signup/member creation
 Please approve or revise these points before implementation begins:
 
 1. Use a workspace slug for tenant-aware login, or make email globally unique?
-2. Keep public join-team registration temporarily, or move directly to invitation-only onboarding?
+2. Invitation-only onboarding is implemented; confirm whether any future self-service join policy is required.
 3. Should members see only their own published assignments or their whole subunit’s published roster?
 4. Should manual roster reassignment be included in the MVP planning screen?
 5. Confirm the consecutive-date fairness definition proposed in Decision D.

@@ -6,7 +6,7 @@
 2. Create and verify a Supabase database backup before applying migrations.
 3. Apply `roster-core-service/prisma/migrations` in staging with `npm run db:deploy`.
 4. Verify existing organisations received unique slugs and retain their tenant data.
-5. Configure the variables in each `.env.example`. The JWT secret must match across auth and roster services; the notification service key must match across roster and notification services.
+5. Configure the variables in each `.env.example`. The auth service must use a server-side Supabase service-role key for the atomic onboarding functions. The JWT secret must match across auth and roster services; the notification service key must match across roster and notification services.
 6. Deploy notification-service, auth-service, roster-core-service, then the client.
 7. Run both services' `/health` checks and the two-tenant acceptance journey from the implementation plan.
 

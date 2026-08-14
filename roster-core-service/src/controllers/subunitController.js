@@ -2,8 +2,7 @@ const prisma = require("../config/prismaClient");
 const { recordAudit } = require("../services/auditService");
 
 const getSubunits = async (req, res) => {
-  const churchId = req.user?.churchId || req.query.churchId;
-  if (!churchId) return res.status(400).json({ message: "churchId is required" });
+  const churchId = req.user.churchId;
   try {
     const subunits = await prisma.subunit.findMany({ where: { churchId }, orderBy: { name: "asc" } });
     return res.json({ subunits });

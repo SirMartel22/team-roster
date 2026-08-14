@@ -20,16 +20,25 @@ export function UnitManagement({ token, subunits, members, onChanged }) {
   const [name, setName] = useState("");
   const [dutyDrafts, setDutyDrafts] = useState({});
   const [message, setMessage] = useState("");
+  const [isCreating, setIsCreating] = useState(false);
+  const [editingUnit, setEditingUnit] = useState(null);
+  const [renameName, setRenameName] = useState("");
+  const [renameError, setRenameError] = useState("");
+  const [isRenaming, setIsRenaming] = useState(false);
 
   const loadDuties = useCallback(() => request("/duties", token).then((data) => setDuties(data.duties || [])).catch((error) => setMessage(error.message)), [token]);
   useEffect(() => { loadDuties(); }, [loadDuties]);
 
   const createUnit = async (event) => {
     event.preventDefault();
+    if (isCreating) return;
+    setIsCreating(true);
+    setMessage("");
     try {
-      await request("/subunits", token, { method: "POST", body: JSON.stringify({ name }) });
-      setName(""); setMessage("Unit created."); onChanged?.();
+      const data = await request("/subunits", token, { method: "POST", body: JSON.stringify({ name }) });
+      setName(""); setMessage("Unit created."); onChanged?.({ type: "created", subunit: data.subunit });
     } catch (error) { setMessage(error.message); }
+    finally { setIsCreating(false); }
   };
 
   const createDuty = async (subunitId) => {
@@ -43,30 +52,62 @@ export function UnitManagement({ token, subunits, members, onChanged }) {
     try { await request(`/duties/${id}`, token, { method: "DELETE" }); loadDuties(); }
     catch (error) { setMessage(error.message); }
   };
-  const renameUnit = async (subunit) => {
-    const nextName = window.prompt("New unit name", subunit.name);
-    if (!nextName?.trim() || nextName.trim() === subunit.name) return;
-    try { await request(`/subunits/${subunit.id}`, token, { method: "PUT", body: JSON.stringify({ name: nextName }) }); onChanged?.(); }
-    catch (error) { setMessage(error.message); }
+  const openRenameModal = (subunit) => {
+    setEditingUnit(subunit);
+    setRenameName(subunit.name);
+    setRenameError("");
+  };
+  const closeRenameModal = () => {
+    if (isRenaming) return;
+    setEditingUnit(null);
+    setRenameName("");
+    setRenameError("");
+  };
+  const renameUnit = async (event) => {
+    event.preventDefault();
+    const nextName = renameName.trim();
+    if (!editingUnit || !nextName || nextName === editingUnit.name || isRenaming) return;
+    setIsRenaming(true);
+    setRenameError("");
+    try {
+      const data = await request(`/subunits/${editingUnit.id}`, token, { method: "PUT", body: JSON.stringify({ name: nextName }) });
+      onChanged?.({ type: "updated", subunit: data.subunit });
+      setMessage("Unit renamed.");
+      setEditingUnit(null);
+      setRenameName("");
+    } catch (error) { setRenameError(error.message); }
+    finally { setIsRenaming(false); }
   };
   const removeUnit = async (subunit) => {
     if (!window.confirm(`Delete ${subunit.name}? This works only when it has no members, duties, or requests.`)) return;
-    try { await request(`/subunits/${subunit.id}`, token, { method: "DELETE" }); onChanged?.(); }
+    try { await request(`/subunits/${subunit.id}`, token, { method: "DELETE" }); onChanged?.({ type: "deleted", id: subunit.id }); }
     catch (error) { setMessage(error.message); }
   };
 
   return <section className="workspace-tool">
     <div className="view-heading standalone"><div><p className="eyebrow">STRUCTURE</p><h2>Work units and duties</h2><p>Configure the people groups and responsibilities used by the scheduler.</p></div></div>
     {message && <p className="tool-message">{message}</p>}
-    <form className="inline-tool-form" onSubmit={createUnit}><input value={name} onChange={(event) => setName(event.target.value)} placeholder="New work unit" required /><button>Create unit</button></form>
+    <form className="inline-tool-form" onSubmit={createUnit} aria-busy={isCreating}><input value={name} onChange={(event) => setName(event.target.value)} placeholder="New work unit" required disabled={isCreating} /><button disabled={isCreating || !name.trim()}>{isCreating ? "Creating…" : "Create unit"}</button></form>
     <div className="subunit-grid">{subunits.map((subunit) => {
       const unitDuties = duties.filter((duty) => duty.subunitId === subunit.id);
       const count = members.filter((member) => member.subunitId === subunit.id).length;
-      return <article key={subunit.id} className="subunit-card tool-card"><div className="tool-card-heading"><h3>{subunit.name}</h3><div><button onClick={() => renameUnit(subunit)}>Rename</button><button onClick={() => removeUnit(subunit)}>Delete</button></div></div><p>{count} {count === 1 ? "member" : "members"}</p>
+      return <article key={subunit.id} className="subunit-card tool-card"><div className="tool-card-heading"><h3>{subunit.name}</h3><div><button onClick={() => openRenameModal(subunit)}>Rename</button><button onClick={() => removeUnit(subunit)}>Delete</button></div></div><p>{count} {count === 1 ? "member" : "members"}</p>
         <ul className="duty-list">{unitDuties.map((duty) => <li key={duty.id}><span>{duty.name}</span><button onClick={() => removeDuty(duty.id)} aria-label={`Delete ${duty.name}`}>×</button></li>)}</ul>
         <div className="inline-tool-form compact"><input value={dutyDrafts[subunit.id] || ""} onChange={(event) => setDutyDrafts((current) => ({ ...current, [subunit.id]: event.target.value }))} placeholder="Add duty" /><button type="button" onClick={() => createDuty(subunit.id)} disabled={!dutyDrafts[subunit.id]?.trim()}>Add</button></div>
       </article>;
     })}</div>
+    {editingUnit && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeRenameModal(); }}>
+      <div className="rename-modal" role="dialog" aria-modal="true" aria-labelledby="rename-unit-title">
+        <div className="rename-modal-header"><div><p className="eyebrow">WORK UNIT</p><h2 id="rename-unit-title">Rename unit</h2></div><button type="button" className="modal-close" onClick={closeRenameModal} disabled={isRenaming} aria-label="Close rename dialog">×</button></div>
+        <p className="rename-modal-copy">Choose a clear name your team will recognise.</p>
+        <form onSubmit={renameUnit}>
+          <label htmlFor="rename-unit-name">Unit name</label>
+          <input id="rename-unit-name" value={renameName} onChange={(event) => setRenameName(event.target.value)} disabled={isRenaming} autoFocus required />
+          {renameError && <p className="modal-error" role="alert">{renameError}</p>}
+          <div className="rename-modal-actions"><button type="button" className="secondary-button" onClick={closeRenameModal} disabled={isRenaming}>Cancel</button><button type="submit" className="primary-button" disabled={isRenaming || !renameName.trim() || renameName.trim() === editingUnit.name}>{isRenaming ? "Renaming…" : "Save changes"}</button></div>
+        </form>
+      </div>
+    </div>}
   </section>;
 }
 

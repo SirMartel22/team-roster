@@ -7,7 +7,7 @@ const router = express.Router();
 
 
 // Defined the route to getting and creating subunit
-router.get('/subunits', getSubunits);
+router.get('/subunits', requireAuth, getSubunits);
 router.post('/subunits', requireAuth, requireRole('admin'), createSubunit);
 router.put('/subunits/:id', requireAuth, requireRole('admin'), updateSubunit);
 router.delete('/subunits/:id', requireAuth, requireRole('admin'), deleteSubunit);

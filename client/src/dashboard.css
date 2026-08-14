@@ -50,4 +50,21 @@
 .break-all { overflow-wrap: anywhere; }
 .member-status-button { justify-self: start; border: 1px solid #b9d7c4; background: #edf7f0; color: #24543a; border-radius: 999px; padding: .4rem .65rem; cursor: pointer; }
 .member-status-button.inactive { border-color: #e4c5bd; background: #fff0ed; color: #8c4137; }
+.modal-backdrop { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 1.25rem; background: rgba(10, 25, 18, .58); backdrop-filter: blur(3px); }
+.rename-modal { width: min(100%, 460px); padding: 1.5rem; border: 1px solid rgba(24, 62, 47, .12); border-radius: 18px; background: #fff; box-shadow: 0 24px 70px rgba(9, 30, 20, .28); }
+.rename-modal-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.rename-modal-header h2 { margin: .15rem 0 0; color: #172019; font-size: 1.4rem; }
+.rename-modal-header .eyebrow { margin: 0; color: #668072; font-size: .68rem; font-weight: 800; letter-spacing: .12em; }
+.modal-close { width: 34px; height: 34px; border: 0; border-radius: 9px; background: #f0f3ef; color: #365f4d; cursor: pointer; font-size: 1.35rem; line-height: 1; }
+.rename-modal-copy { margin: .75rem 0 1.2rem; color: #6f776f; font-size: .9rem; }
+.rename-modal form { display: grid; gap: .6rem; }
+.rename-modal label { color: #26362d; font-size: .82rem; font-weight: 700; }
+.rename-modal input { width: 100%; min-height: 46px; border: 1px solid #cfd7d1; border-radius: 10px; padding: .7rem .85rem; outline: 0; background: #fff; color: #172019; }
+.rename-modal input:focus { border-color: #3d7559; box-shadow: 0 0 0 3px rgba(61, 117, 89, .14); }
+.modal-error { margin: .15rem 0 0; padding: .65rem .75rem; border-radius: 9px; background: #fff0ed; color: #8c4137; font-size: .78rem; }
+.rename-modal-actions { margin-top: .7rem; display: flex; justify-content: flex-end; gap: .65rem; }
+.rename-modal-actions button { min-height: 42px; padding: .65rem 1rem; border-radius: 10px; cursor: pointer; font-weight: 700; }
+.rename-modal-actions .secondary-button { border: 1px solid #d6ddd8; background: #fff; color: #365046; }
+.rename-modal-actions .primary-button { border: 1px solid #183e2f; background: #183e2f; color: #fff; }
+.rename-modal button:disabled, .rename-modal input:disabled { cursor: not-allowed; opacity: .58; }
 @media (max-width: 700px) { .roster-row, .request-row { align-items: stretch; flex-direction: column; } .roster-row select { width: 100%; } }

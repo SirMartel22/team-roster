@@ -16,6 +16,24 @@ async function request(path, token, options = {}) {
 
 const today = () => new Date().toISOString().slice(0, 10);
 
+const logInvitationUrl = (inviteUrl) => {
+  if (!inviteUrl) return;
+  try {
+    const parsed = new URL(inviteUrl);
+    if (import.meta.env.DEV) {
+      console.info("[Rosterly] Generated invitation URL:", inviteUrl);
+      return;
+    }
+    parsed.searchParams.set("invite", "[redacted]");
+    console.info("[Rosterly] Generated invitation URL:", parsed.toString());
+    if (parsed.hostname === "localhost") {
+      console.error("[Rosterly] Production CLIENT_URL is misconfigured: invitation links point to localhost.");
+    }
+  } catch {
+    console.error("[Rosterly] The API returned an invalid invitation URL.");
+  }
+};
+
 export function UnitManagement({ token, subunits, members, onChanged }) {
   const toast = useToast();
   const [duties, setDuties] = useState([]);
@@ -218,6 +236,7 @@ export function RequestsView({ token, isAdmin, subunits }) {
     }
   }, [token, isAdmin, toast]);
   const reportInvitation = (data) => {
+    logInvitationUrl(data.inviteUrl);
     const delivery = data.notification?.data?.result;
     if (data.notification?.status === "not_configured" || data.notification?.code === "not_configured") {
       toast.error("Invitation created, but the production email service is not configured.");

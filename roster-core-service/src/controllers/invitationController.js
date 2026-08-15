@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const prisma = require("../config/prismaClient");
 const { recordAudit } = require("../services/auditService");
 const { notify } = require("../services/notificationClient");
+const { buildInvitationUrl } = require("../utils/invitationUrl");
 
 const hashToken = (token) => crypto.createHash("sha256").update(token).digest("hex");
 
@@ -22,6 +23,13 @@ const createInvitation = async (req, res) => {
     const existing = await prisma.invitation.findFirst({ where: { churchId: req.user.churchId, email, status: "pending", expiresAt: { gt: new Date() } } });
     if (existing) return res.status(409).json({ message: "A valid invitation is already pending for this email" });
     const token = crypto.randomBytes(32).toString("hex");
+    let inviteUrl;
+    try {
+      inviteUrl = buildInvitationUrl(token);
+    } catch (configurationError) {
+      console.error("Invitation URL configuration error:", configurationError.message);
+      return res.status(503).json({ message: "Invitation links are not configured for this environment" });
+    }
     const invitation = await prisma.invitation.create({ data: {
       churchId: req.user.churchId,
       email,
@@ -31,7 +39,6 @@ const createInvitation = async (req, res) => {
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     } });
     await recordAudit({ churchId: req.user.churchId, actorUserId: req.user.userId, action: "invitation.created", entityType: "invitation", entityId: invitation.id });
-    const inviteUrl = `${process.env.CLIENT_URL || "http://localhost:5173"}/?invite=${token}`;
     const notification = await notify("/notify/invitation", { churchId: req.user.churchId, invitationId: invitation.id, email, inviteUrl });
     return res.status(201).json({
       message: "Invitation created",

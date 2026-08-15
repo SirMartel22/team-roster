@@ -219,9 +219,14 @@ export function RequestsView({ token, isAdmin, subunits }) {
   }, [token, isAdmin, toast]);
   const reportInvitation = (data) => {
     const delivery = data.notification?.data?.result;
+    if (data.notification?.status === "not_configured" || data.notification?.code === "not_configured") {
+      toast.error("Invitation created, but the production email service is not configured.");
+      return;
+    }
     if (data.notification?.status === "processed" && ["sent", "already_sent"].includes(delivery?.status)) toast.success("Invitation created and email sent.");
     else if (data.notification?.status === "failed" || delivery?.status === "failed") toast.error(`Invitation created, but the email was not sent: ${delivery?.error || data.notification?.message || "Notification delivery failed"}`);
-    else toast.warning("Invitation created, but email delivery is still pending. The invitation remains available in the list.");
+    else if (delivery?.status === "already_processing") toast.warning("Invitation created and email delivery is still processing. Check the invitation list shortly.");
+    else toast.warning("Invitation created, but the email provider returned an unknown delivery status.");
   };
   const submitSwitch = async () => { try { const data = await request("/subunit-switch-requests", token, { method: "POST", body: JSON.stringify({ toSubunitId: target }) }); toast.success(data.message); load(); } catch (error) { toast.error(error.message); } };
   const decide = async (id, status) => { try { await request(`/subunit-switch-requests/${id}`, token, { method: "PATCH", body: JSON.stringify({ status }) }); toast.success(`Request ${status}.`); load(); } catch (error) { toast.error(error.message); } };

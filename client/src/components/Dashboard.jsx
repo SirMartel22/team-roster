@@ -96,7 +96,11 @@ export function Dashboard() {
       <main className="dashboard-main">
         <header className="dashboard-header">
           <div><button className="mobile-menu" onClick={() => setMobileNavOpen((open) => !open)} aria-label="Toggle navigation">☰</button><p>{new Intl.DateTimeFormat("en-NG", { weekday: "long", day: "numeric", month: "long" }).format(new Date())}</p><h1>{activeView}</h1></div>
-          <div className="dashboard-actions"><button type="button" className="icon-button" aria-label="Notifications" title="Notifications" onClick={() => toast.info("You have no new notifications.")}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg></button>{isAdmin && <button type="button" className="primary-action" onClick={openPlanner}>Plan work <span>→</span></button>}</div>
+          <div className="dashboard-actions">
+            <button type="button" className="icon-button" aria-label="Notifications" title="Notifications" onClick={() => toast.info("You have no new notifications.")}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg></button>
+            {isAdmin && <button type="button" className="primary-action" onClick={openPlanner}>Plan work <span>→</span></button>}
+            <button type="button" className="logout-action" onClick={handleLogout} disabled={isLoggingOut} aria-label="Sign out"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17l5-5-5-5M15 12H3M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /></svg><span>{isLoggingOut ? "Signing out…" : "Sign out"}</span></button>
+          </div>
         </header>
 
         {loading ? <DashboardSkeleton /> : isAdmin ? (

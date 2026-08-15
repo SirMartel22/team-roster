@@ -21,6 +21,7 @@ export function CreateTeamForm() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || "We couldn't create your workspace.");
       localStorage.setItem("authToken", data.token);
+      localStorage.setItem("authUser", JSON.stringify(data.user));
       sessionStorage.setItem("pendingToast", JSON.stringify({ type: "success", message: "Workspace created successfully." }));
       window.location.reload();
     } catch (requestError) {

@@ -20,6 +20,9 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const restoreSession = async () => {
       const storedToken = localStorage.getItem("authToken");
+      const cachedUserValue = localStorage.getItem("authUser");
+      let cachedUser = null;
+      try { cachedUser = cachedUserValue ? JSON.parse(cachedUserValue) : null; } catch { localStorage.removeItem("authUser"); }
 
       if (!storedToken) {
         //No stored session at all - nothing to restore
@@ -37,12 +40,13 @@ export const AuthProvider = ({ children }) => {
           },
         );
 
-        if (!response.ok) {
-          //Token expired or invalid - clear it, force a fresh login
+        if (response.status === 401 || response.status === 403) {
           localStorage.removeItem("authToken");
+          localStorage.removeItem("authUser");
           setIsInitializing(false);
           return;
         }
+        if (!response.ok) throw new Error("Session verification is temporarily unavailable");
 
         const data = await response.json();
 
@@ -50,11 +54,14 @@ export const AuthProvider = ({ children }) => {
         // (the decoded JWT payload) — restore both token and user state.
 
         setToken(storedToken);
-        // setToken(storedToken);
         setUser(data.user);
+        localStorage.setItem("authUser", JSON.stringify(data.user));
       } catch (error) {
         console.error("Failed to restore session:", error);
-        localStorage.removeItem("authToken");
+        if (cachedUser) {
+          setToken(storedToken);
+          setUser(cachedUser);
+        }
       } finally {
         setIsInitializing(false);
       }
@@ -85,6 +92,7 @@ export const AuthProvider = ({ children }) => {
 
       //   persist the token so it survives a page reload
       localStorage.setItem("authToken", data.token);
+      localStorage.setItem("authUser", JSON.stringify(data.user));
 
       // Store the token and user info in state
       setToken(data.token);
@@ -95,14 +103,33 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   // logout function - clear token and user from state
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    let revoked = !token;
+    let message = "Signed out successfully";
+    try {
+      if (token) {
+        const response = await fetch(`${import.meta.env.VITE_AUTH_SERVICE_URL}/logout`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await response.json().catch(() => ({}));
+        revoked = response.ok;
+        message = data.message || (response.ok ? message : "You were signed out on this device, but server revocation could not be confirmed.");
+      }
+    } catch {
+      revoked = false;
+      message = "You were signed out on this device, but server revocation could not be confirmed.";
+    } finally {
     // NEW: clear the persisted token too, not just in-memory state —
     // otherwise a reload after logout would silently restore the
     // "logged out" session right back.
-    localStorage.removeItem("authToken");
-    setToken(null);
-    setUser(null);
-  }, []);
+      localStorage.removeItem("authToken");
+      localStorage.removeItem("authUser");
+      setToken(null);
+      setUser(null);
+    }
+    return { revoked, message };
+  }, [token]);
 
   const value = {
     token,

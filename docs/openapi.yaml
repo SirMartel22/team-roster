@@ -92,6 +92,48 @@ paths:
       security: [{ bearerAuth: [] }]
       responses:
         '200': { description: Current user }
+  /password-reset/request:
+    post:
+      summary: Request a tenant-aware password reset email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [workspaceSlug, email]
+              properties:
+                workspaceSlug: { type: string }
+                email: { type: string, format: email }
+      responses:
+        '200': { description: Generic response returned for both known and unknown accounts }
+        '400': { description: Workspace or email omitted }
+        '429': { description: Too many reset requests }
+  /password-reset/confirm:
+    post:
+      summary: Consume a one-time reset token and set a new password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, password]
+              properties:
+                token: { type: string }
+                password: { type: string, format: password, minLength: 8 }
+      responses:
+        '200': { description: Password updated and outstanding reset tokens invalidated }
+        '400': { description: Invalid, expired, or reused token; or invalid password }
+        '429': { description: Too many reset attempts }
+  /logout:
+    post:
+      summary: Revoke the authenticated caller's current JWT session
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Current session revoked }
+        '401': { description: Missing, invalid, expired, or already-revoked session }
+        '500': { description: Session revocation failed; client should still clear local credentials }
   /subunits:
     get:
       summary: List units in the authenticated user's organisation

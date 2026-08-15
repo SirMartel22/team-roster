@@ -16,6 +16,7 @@ const resultQuery = (result, calls) => {
     eq(column, value) { calls?.push(["eq", column, value]); return query; },
     order(column, value) { calls?.push(["order", column, value]); return query; },
     async single() { return result; },
+    async maybeSingle() { return result; },
   };
   return query;
 };
@@ -175,4 +176,110 @@ test("public registration without an invitation is rejected", async () => {
 
   assert.equal(res.statusCode, 400);
   assert.match(res.body.message, /invitation/i);
+});
+
+test("password reset request returns a generic response for an unknown workspace", async () => {
+  let notificationCalled = false;
+  const supabaseClient = {
+    from() { return resultQuery({ data: null, error: null }); },
+  };
+  const { requestPasswordReset } = createAuthHandlers({
+    ...dependencies(supabaseClient),
+    notificationClient: async () => { notificationCalled = true; },
+  });
+  const res = responseRecorder();
+
+  await requestPasswordReset({ body: { workspaceSlug: "missing-workspace", email: "unknown@example.com" } }, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.match(res.body.message, /if that account exists/i);
+  assert.equal(notificationCalled, false);
+});
+
+test("password reset request stores only a token hash and sends the raw token in the recovery URL", async () => {
+  const rpcCalls = [];
+  const notifications = [];
+  const supabaseClient = {
+    from(table) {
+      if (table === "churches") return resultQuery({ data: { id: "church-1" }, error: null });
+      return resultQuery({ data: { id: "user-1", church_id: "church-1", email: "member@example.com", name: "Member" }, error: null });
+    },
+    async rpc(name, parameters) {
+      rpcCalls.push([name, parameters]);
+      return { data: "reset-request-1", error: null };
+    },
+  };
+  const { requestPasswordReset } = createAuthHandlers({
+    ...dependencies(supabaseClient),
+    notificationClient: async (path, payload) => { notifications.push([path, payload]); return { status: "processed" }; },
+  });
+  const res = responseRecorder();
+
+  await requestPasswordReset({ body: { workspaceSlug: "BHBC", email: " MEMBER@EXAMPLE.COM " } }, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(rpcCalls[0][0], "create_password_reset_token");
+  assert.equal(rpcCalls[0][1].p_user_id, "user-1");
+  assert.match(rpcCalls[0][1].p_token_hash, /^[a-f0-9]{64}$/);
+  assert.equal(notifications[0][0], "/notify/password-reset");
+  const rawToken = new URL(notifications[0][1].resetUrl).searchParams.get("reset");
+  assert.ok(rawToken);
+  assert.notEqual(rawToken, rpcCalls[0][1].p_token_hash);
+  assert.equal(crypto.createHash("sha256").update(rawToken).digest("hex"), rpcCalls[0][1].p_token_hash);
+});
+
+test("password reset confirmation hashes the new password and consumes the token", async () => {
+  const rpcCalls = [];
+  const supabaseClient = {
+    async rpc(name, parameters) {
+      rpcCalls.push([name, parameters]);
+      return { data: true, error: null };
+    },
+  };
+  const { confirmPasswordReset } = createAuthHandlers(dependencies(supabaseClient));
+  const res = responseRecorder();
+
+  await confirmPasswordReset({ body: { token: "one-time-token", password: "new-password" } }, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(rpcCalls[0][0], "reset_password_with_token");
+  assert.equal(rpcCalls[0][1].p_token_hash, crypto.createHash("sha256").update("one-time-token").digest("hex"));
+  assert.equal(rpcCalls[0][1].p_password_hash, "hashed-password");
+});
+
+test("expired or reused password reset links are rejected", async () => {
+  const supabaseClient = {
+    async rpc() { return { data: null, error: { code: "P0001", message: "RESET_TOKEN_INVALID" } }; },
+  };
+  const { confirmPasswordReset } = createAuthHandlers(dependencies(supabaseClient));
+  const res = responseRecorder();
+
+  await confirmPasswordReset({ body: { token: "expired-token", password: "new-password" } }, res);
+
+  assert.equal(res.statusCode, 400);
+  assert.match(res.body.message, /invalid or has expired/i);
+});
+
+test("logout stores only the current token hash until its expiry", async () => {
+  const rpcCalls = [];
+  const supabaseClient = {
+    async rpc(name, parameters) {
+      rpcCalls.push([name, parameters]);
+      return { data: true, error: null };
+    },
+  };
+  const { logout } = createAuthHandlers(dependencies(supabaseClient));
+  const res = responseRecorder();
+  const expiresAt = Math.floor(Date.now() / 1000) + 3600;
+
+  await logout({
+    authToken: "signed-jwt-value",
+    user: { userId: "user-1", churchId: "church-1", role: "member", exp: expiresAt },
+  }, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(rpcCalls[0][0], "revoke_session");
+  assert.equal(rpcCalls[0][1].p_token_hash, crypto.createHash("sha256").update("signed-jwt-value").digest("hex"));
+  assert.notEqual(rpcCalls[0][1].p_token_hash, "signed-jwt-value");
+  assert.equal(rpcCalls[0][1].p_expires_at, new Date(expiresAt * 1000).toISOString());
 });

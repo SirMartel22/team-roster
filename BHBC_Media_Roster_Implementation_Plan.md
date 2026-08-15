@@ -29,6 +29,49 @@ Acceptance criteria:
 - The browser performs only one registration mutation.
 - Existing environments can upgrade through a forward-only migration.
 
+### Current implementation slice — password recovery
+
+Problem:
+
+- The login screen exposes a “Forgot password?” control, but it has no behaviour and the custom authentication system has no recovery-token storage or reset endpoints.
+
+Implementation:
+
+1. Add tenant-aware `POST /password-reset/request` and token-based `POST /password-reset/confirm` endpoints.
+2. Always return the same request response whether the workspace/account exists, preventing account enumeration.
+3. Store only SHA-256 token hashes, expire tokens after one hour, and invalidate older outstanding tokens when a new request is created.
+4. Atomically consume a valid token, replace the bcrypt password hash, and invalidate all reset tokens for that user.
+5. Deliver recovery links through the authenticated notification service with logged, idempotent email delivery.
+6. Add request and reset screens to the client, plus controller and notification regression tests.
+
+Acceptance criteria:
+
+- Reset links are tenant-scoped, single-use, time-limited, and never stored in plaintext.
+- Unknown workspaces and email addresses receive the same public response as known accounts.
+- A successful reset permits the new password and prevents reuse of the link.
+- Notification failures do not disclose whether an account exists.
+
+### Current implementation slice — revocable logout
+
+Problem:
+
+- Admin and member dashboards only removed the JWT from browser storage. The same token remained valid until its 30-day expiry if retained elsewhere.
+
+Implementation:
+
+1. Add a `revoked_sessions` table containing only SHA-256 token hashes and their original expiry time.
+2. Add authenticated `POST /logout` to revoke the caller’s current token.
+3. Check the denylist in both auth-service and roster-core-service authentication middleware.
+4. Clear browser authentication state even if the logout request cannot reach the server, while reporting that server revocation could not be confirmed.
+5. Present an explicit sign-out button to both administrators and members.
+
+Acceptance criteria:
+
+- A successful logout immediately rejects the same JWT from both backend services.
+- Raw JWTs are never stored in the database.
+- Admins and members use the same logout contract.
+- Browser state is cleared after every logout attempt.
+
 ---
 
 ## 1. Product End Goal

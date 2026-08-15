@@ -22,6 +22,7 @@ export function Dashboard() {
   const [activeView, setActiveView] = useState(user?.role === "admin" ? "Overview" : "My overview");
   const [loading, setLoading] = useState(true);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const isAdmin = user?.role === "admin";
 
   useEffect(() => {
@@ -66,6 +67,13 @@ export function Dashboard() {
     window.scrollTo({ top: 0, behavior: "smooth" });
     toast.info("Planning tools opened.");
   };
+  const handleLogout = async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    const result = await logout();
+    if (result.revoked) toast.success("Signed out successfully.");
+    else toast.warning(result.message);
+  };
 
   return (
     <div className="dashboard-page">
@@ -80,7 +88,7 @@ export function Dashboard() {
         </div>
         <div className="sidebar-bottom">
           <div className="help-card"><span>?</span><strong>Need a hand?</strong><p>Everything you need to get your team ready.</p><button>View quick guide</button></div>
-          <button className="profile-button" onClick={logout}><span className="member-avatar">{initials(user?.name)}</span><span><strong>{user?.name}</strong><small>{isAdmin ? "Administrator" : mySubunit?.name || "Team member"}</small></span><b title="Sign out">→</b></button>
+          <button className="profile-button" onClick={handleLogout} disabled={isLoggingOut} aria-label={`Sign out ${user?.name || "current user"}`}><span className="member-avatar">{initials(user?.name)}</span><span><strong>{user?.name}</strong><small>{isAdmin ? "Administrator" : mySubunit?.name || "Team member"}</small></span><b>{isLoggingOut ? "Signing out…" : "Sign out"}</b></button>
         </div>
       </aside>
       {mobileNavOpen && <button type="button" className="sidebar-scrim" onClick={() => setMobileNavOpen(false)} aria-label="Close navigation" />}

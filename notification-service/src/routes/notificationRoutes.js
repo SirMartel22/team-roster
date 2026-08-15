@@ -1,5 +1,5 @@
 const express = require('express');
-const { notifyRosterPublished, notifyInvitation, notifySwitchRequest } = require('../controllers/notificationController');
+const { notifyRosterPublished, notifyInvitation, notifySwitchRequest, notifyPasswordReset } = require('../controllers/notificationController');
 const requireServiceAuth = require('../middleware/requireServiceAuth');
 
 
@@ -8,5 +8,6 @@ const router = express.Router();
 router.post('/notify/roster-published', requireServiceAuth, notifyRosterPublished);
 router.post('/notify/invitation', requireServiceAuth, notifyInvitation);
 router.post('/notify/switch-request', requireServiceAuth, notifySwitchRequest);
+router.post('/notify/password-reset', requireServiceAuth, notifyPasswordReset);
 
 module.exports = router;

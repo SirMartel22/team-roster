@@ -1,42 +1,47 @@
-const jwt = require('jsonwebtoken');
+const crypto = require("crypto");
+const jwt = require("jsonwebtoken");
+const supabase = require("../config/supabaseClient");
 
-const JWT_SECRET = process.env.JWT_SECRET;
+const createAuthMiddleware = ({
+  jwtLib = jwt,
+  supabaseClient = supabase,
+  jwtSecret = process.env.JWT_SECRET,
+  cryptoLib = crypto,
+} = {}) => async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ message: "No token provided" });
+  }
 
+  const token = authHeader.slice(7);
+  let decoded;
+  try {
+    decoded = jwtLib.verify(token, jwtSecret);
+  } catch {
+    return res.status(401).json({ message: "Invalid or expired token" });
+  }
 
-// Express middleware signature: (req, res, next).
-// `next` is a function you call to say "this request passed my check,
-function requireAuth(req, res, next){
-    // The client sends the token in the authorization
-    //header, formatted as: "Bearer <token>"
-    const authHeader = req.headers.authorization;
+  try {
+    const tokenHash = cryptoLib.createHash("sha256").update(token).digest("hex");
+    const { data: revoked, error } = await supabaseClient
+      .from("revoked_sessions")
+      .select("id")
+      .eq("token_hash", tokenHash)
+      .gt("expires_at", new Date().toISOString())
+      .maybeSingle();
 
-    if(!authHeader || !authHeader.startsWith('Bearer ')) {
-        //401 = "You didn't provide credentials" (distinct from the wrong credentials)
-        return res.status(401).json({
-            message: "No token provided"
-        });
-    }
+    if (error) return res.status(503).json({ message: "Authentication service is temporarily unavailable" });
+    if (revoked) return res.status(401).json({ message: "Session has been signed out" });
 
-    //Bearer abc123... -> Split on the space, take the second part...
-    const token = authHeader.split(' ')[1];
+    req.user = decoded;
+    req.authToken = token;
+    next();
+  } catch {
+    return res.status(503).json({ message: "Authentication service is temporarily unavailable" });
+  }
+};
 
-
-    try{
-        
-        const decoded = jwt.verify(token, JWT_SECRET);
-
-        // Attach the decoded identity onto the request object itself.
-        req.user = decoded;
-
-        //pass the control to the next thing in the chain...
-        next();
-
-    } catch(error){
-        console.error("Unexpected error occured", error);
-        return res.status(401).json({
-            message: "Invalid or expired token"
-        });
-    }
-}
+const requireAuth = createAuthMiddleware();
 
 module.exports = requireAuth;
+module.exports.createAuthMiddleware = createAuthMiddleware;

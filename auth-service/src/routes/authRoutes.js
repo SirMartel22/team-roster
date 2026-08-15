@@ -1,6 +1,6 @@
 //Defines the URL path (/register, /login) and which functions handle each
 const express = require("express");
-const { register, login, createTeam, getInvitation } = require("../controllers/authController");
+const { register, login, createTeam, getInvitation, requestPasswordReset, confirmPasswordReset, logout } = require("../controllers/authController");
 const requireAuth = require("../middleware/authMiddleware");
 const requireRole = require("../middleware/requireRole");
 const supabase = require("../config/supabaseClient");
@@ -12,6 +12,9 @@ const router = express.Router();
 router.post("/register", rateLimit({ max: 10 }), register);
 router.post("/login", rateLimit({ max: 10 }), login);
 router.post("/teams", rateLimit({ max: 5 }), createTeam); // public entry point for a new workspace
+router.post("/password-reset/request", rateLimit({ max: 5 }), requestPasswordReset);
+router.post("/password-reset/confirm", rateLimit({ max: 10 }), confirmPasswordReset);
+router.post("/logout", requireAuth, logout);
 router.get('/invitations/:token', getInvitation);
 
 

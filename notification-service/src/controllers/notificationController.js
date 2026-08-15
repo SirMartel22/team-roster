@@ -1,6 +1,7 @@
 const { Resend } = require("resend");
 const supabase = require("../config/supabaseClient");
 const { escapeHtml } = require("../utils/html");
+const { passwordResetEmail } = require("../utils/emailTemplates");
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -70,4 +71,20 @@ const notifySwitchRequest = async (req, res) => {
   return res.json({ message: "Switch notifications processed", results });
 };
 
-module.exports = { notifyRosterPublished, notifyInvitation, notifySwitchRequest, sendLoggedEmail };
+const notifyPasswordReset = async (req, res) => {
+  const { churchId, resetRequestId, email, name, resetUrl } = req.body;
+  if (!churchId || !resetRequestId || !email || !resetUrl) {
+    return res.status(400).json({ message: "Invalid password reset notification" });
+  }
+  const result = await sendLoggedEmail({
+    churchId,
+    recipient: email,
+    eventType: "password-reset",
+    idempotencyKey: `password-reset:${resetRequestId}`,
+    subject: "Reset your Rosterly password",
+    html: passwordResetEmail({ name, resetUrl }),
+  });
+  return res.json({ message: "Password reset notification processed", result });
+};
+
+module.exports = { notifyRosterPublished, notifyInvitation, notifySwitchRequest, notifyPasswordReset, sendLoggedEmail };

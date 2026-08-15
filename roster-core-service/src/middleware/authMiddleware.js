@@ -1,32 +1,43 @@
-const jwt = require('jsonwebtoken');
+const crypto = require("crypto");
+const jwt = require("jsonwebtoken");
+const prisma = require("../config/prismaClient");
 
-const JWT_SECRET = process.env.JWT_SECRET
+const createAuthMiddleware = ({
+  jwtLib = jwt,
+  prismaClient = prisma,
+  jwtSecret = process.env.JWT_SECRET,
+  cryptoLib = crypto,
+} = {}) => async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ message: "No token provided" });
+  }
 
-const requireAuth = (req, res, next) => {
-    const authHeader = req.headers.authorization;
+  const token = authHeader.slice(7);
+  let decoded;
+  try {
+    decoded = jwtLib.verify(token, jwtSecret);
+  } catch {
+    return res.status(401).json({ message: "Invalid or expired token" });
+  }
 
-    if(!authHeader || !authHeader.startsWith('Bearer')){
-        return res.status(401).json({
-            message: 'No token provided'
-        });
-    }
+  try {
+    const tokenHash = cryptoLib.createHash("sha256").update(token).digest("hex");
+    const revoked = await prismaClient.revokedSession.findFirst({
+      where: { tokenHash, expiresAt: { gt: new Date() } },
+      select: { id: true },
+    });
+    if (revoked) return res.status(401).json({ message: "Session has been signed out" });
 
-    const token = authHeader.split(' ')[1];
+    req.user = decoded;
+    req.authToken = token;
+    next();
+  } catch {
+    return res.status(503).json({ message: "Authentication service is temporarily unavailable" });
+  }
+};
 
-    try{
-
-        const decoded = jwt.verify(token, JWT_SECRET);
-        //decoded contains: {userId, churchId, role}
-
-        req.user = decoded;
-        next();
-    } catch(error) {
-        // console.error(error)
-        return res.status(401).json({
-            message: 'Invalid or expired token'
-        });
-    }
-
-}
+const requireAuth = createAuthMiddleware();
 
 module.exports = requireAuth;
+module.exports.createAuthMiddleware = createAuthMiddleware;

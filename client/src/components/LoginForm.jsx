@@ -2,7 +2,7 @@ import { useState, useContext } from 'react';
 import { AuthContext } from '../context/authContext';
 import { useToast } from '../context/toastContext';
 
-export const LoginForm = () => {
+export const LoginForm = ({ onForgotPassword }) => {
   const { login, isLoading } = useContext(AuthContext);
   const toast = useToast();
   const [workspaceSlug, setWorkspaceSlug] = useState('');
@@ -73,7 +73,7 @@ export const LoginForm = () => {
 
       <div className="auth-actions-row">
         <span className="auth-hint">Remember me</span>
-        <button type="button" className="link-button">
+        <button type="button" className="link-button" onClick={onForgotPassword}>
           Forgot password?
         </button>
       </div>

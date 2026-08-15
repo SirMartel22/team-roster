@@ -7,33 +7,37 @@ datasource db {
 }
 
 model Church {
-  id               String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name             String
-  slug             String                 @unique
-  createdAt        DateTime?              @default(now()) @map("created_at") @db.Timestamptz(6)
-  duties           Duty[]
-  members          Member[]
-  notificationLogs NotificationLog[]
-  rosters          Roster[]
-  subunits         Subunit[]
-  users            User[]
-  invitations      Invitation[]
-  switchRequests   SubunitSwitchRequest[]
-  auditLogs        AuditLog[]
+  id                  String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                String
+  slug                String                 @unique
+  createdAt           DateTime?              @default(now()) @map("created_at") @db.Timestamptz(6)
+  duties              Duty[]
+  members             Member[]
+  notificationLogs    NotificationLog[]
+  rosters             Roster[]
+  subunits            Subunit[]
+  users               User[]
+  invitations         Invitation[]
+  switchRequests      SubunitSwitchRequest[]
+  auditLogs           AuditLog[]
+  passwordResetTokens PasswordResetToken[]
+  revokedSessions     RevokedSession[]
 
   @@map("churches")
 }
 
 model User {
-  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  churchId     String    @map("church_id") @db.Uuid
-  email        String
-  passwordHash String    @map("password_hash")
-  role         String    @default("member")
-  name         String
-  createdAt    DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
-  member       Member?
-  church       Church    @relation(fields: [churchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  id                  String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  churchId            String               @map("church_id") @db.Uuid
+  email               String
+  passwordHash        String               @map("password_hash")
+  role                String               @default("member")
+  name                String
+  createdAt           DateTime?            @default(now()) @map("created_at") @db.Timestamptz(6)
+  member              Member?
+  church              Church               @relation(fields: [churchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  passwordResetTokens PasswordResetToken[]
+  revokedSessions     RevokedSession[]
 
   @@unique([churchId, email])
   @@map("users")
@@ -173,4 +177,33 @@ model AuditLog {
 
   @@index([churchId, createdAt])
   @@map("audit_logs")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  churchId  String    @map("church_id") @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(6)
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  church    Church    @relation(fields: [churchId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([userId, expiresAt])
+  @@map("password_reset_tokens")
+}
+
+model RevokedSession {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  churchId  String   @map("church_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  tokenHash String   @unique @map("token_hash")
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
+  revokedAt DateTime @default(now()) @map("revoked_at") @db.Timestamptz(6)
+  church    Church   @relation(fields: [churchId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([expiresAt])
+  @@map("revoked_sessions")
 }

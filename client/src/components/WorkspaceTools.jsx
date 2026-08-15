@@ -178,7 +178,24 @@ export function RosterPlanner({ token, members }) {
     try {
       const data = await request(`/rosters/${action}`, token, { method: "POST", body: JSON.stringify({ serviceDate: date }) });
       if (action === "generate") setGenerationResults(data.results || []);
-      toast.success(data.message); await load();
+      if (action === "publish") {
+        const notification = data.notification;
+        const summary = notification?.data?.summary;
+        if (notification?.status === "failed") {
+          toast.error(`${data.message}, but task emails were not sent: ${notification.message}`);
+        } else if (summary?.failed) {
+          toast.error(`${data.message}. ${summary.sent + summary.alreadySent} of ${summary.total} task emails were delivered; ${summary.failed} failed.`);
+        } else if (summary?.processing) {
+          toast.warning(`${data.message}. ${summary.sent + summary.alreadySent} of ${summary.total} task emails are delivered; ${summary.processing} are still processing.`);
+        } else if (summary) {
+          toast.success(`${data.message}. Task emails delivered for all ${summary.total} assignments.`);
+        } else {
+          toast.warning(`${data.message}, but email delivery could not be confirmed.`);
+        }
+      } else {
+        toast.success(data.message);
+      }
+      await load();
     } catch (error) { toast.error(error.message); }
     finally { setBusy(false); }
   };
@@ -217,32 +234,39 @@ export function RequestsView({ token, isAdmin, subunits }) {
   const toast = useToast();
   const [requests, setRequests] = useState([]);
   const [invitations, setInvitations] = useState([]);
+  const [invitationPage, setInvitationPage] = useState(1);
+  const [invitationPagination, setInvitationPagination] = useState({ page: 1, pageSize: 10, totalCount: 0, totalPages: 1 });
   const [target, setTarget] = useState("");
   const [email, setEmail] = useState("");
   const [selectedInvitationIds, setSelectedInvitationIds] = useState([]);
   const [deleteInvitationIds, setDeleteInvitationIds] = useState([]);
   const [isDeletingInvitations, setIsDeletingInvitations] = useState(false);
-  const applyInvitations = useCallback((nextInvitations) => {
+  const applyInvitations = useCallback((nextInvitations, nextPagination) => {
+    if (nextPagination && nextPagination.page > nextPagination.totalPages) {
+      setInvitationPage(nextPagination.totalPages);
+      return;
+    }
     setInvitations(nextInvitations);
+    if (nextPagination) setInvitationPagination(nextPagination);
     const visibleIds = new Set(nextInvitations.map((item) => item.id));
     setSelectedInvitationIds((current) => current.filter((id) => visibleIds.has(id)));
   }, []);
   const load = useCallback(async () => {
     try {
       const data = await request("/subunit-switch-requests", token); setRequests(data.requests || []);
-      if (isAdmin) { const inviteData = await request("/invitations", token); applyInvitations(inviteData.invitations || []); }
+      if (isAdmin) { const inviteData = await request(`/invitations?page=${invitationPage}`, token); applyInvitations(inviteData.invitations || [], inviteData.pagination); }
     } catch (error) { toast.error(error.message); }
-  }, [token, isAdmin, toast, applyInvitations]);
+  }, [token, isAdmin, toast, applyInvitations, invitationPage]);
   useEffect(() => {
     request("/subunit-switch-requests", token)
       .then((data) => setRequests(data.requests || []))
       .catch((error) => toast.error(error.message));
     if (isAdmin) {
-      request("/invitations", token)
-        .then((data) => applyInvitations(data.invitations || []))
+      request(`/invitations?page=${invitationPage}`, token)
+        .then((data) => applyInvitations(data.invitations || [], data.pagination))
         .catch((error) => toast.error(error.message));
     }
-  }, [token, isAdmin, toast, applyInvitations]);
+  }, [token, isAdmin, toast, applyInvitations, invitationPage]);
   const reportInvitation = (data) => {
     logInvitationUrl(data.inviteUrl);
     const delivery = data.notification?.data?.result;
@@ -257,8 +281,8 @@ export function RequestsView({ token, isAdmin, subunits }) {
   };
   const submitSwitch = async () => { try { const data = await request("/subunit-switch-requests", token, { method: "POST", body: JSON.stringify({ toSubunitId: target }) }); toast.success(data.message); load(); } catch (error) { toast.error(error.message); } };
   const decide = async (id, status) => { try { await request(`/subunit-switch-requests/${id}`, token, { method: "PATCH", body: JSON.stringify({ status }) }); toast.success(`Request ${status}.`); load(); } catch (error) { toast.error(error.message); } };
-  const invite = async (event) => { event.preventDefault(); try { const data = await request("/invitations", token, { method: "POST", body: JSON.stringify({ email }) }); setEmail(""); reportInvitation(data); load(); } catch (error) { toast.error(error.message); } };
-  const invitationAction = async (id, action) => { try { const data = await request(`/invitations/${id}${action === "resend" ? "/resend" : ""}`, token, { method: action === "revoke" ? "DELETE" : "POST" }); if (action === "resend") reportInvitation(data); else toast.success(data.message); load(); } catch (error) { toast.error(error.message); } };
+  const invite = async (event) => { event.preventDefault(); try { const data = await request("/invitations", token, { method: "POST", body: JSON.stringify({ email }) }); setEmail(""); reportInvitation(data); if (invitationPage === 1) load(); else setInvitationPage(1); } catch (error) { toast.error(error.message); } };
+  const invitationAction = async (id, action) => { try { const data = await request(`/invitations/${id}${action === "resend" ? "/resend" : ""}`, token, { method: action === "revoke" ? "DELETE" : "POST" }); if (action === "resend") { reportInvitation(data); if (invitationPage === 1) load(); else setInvitationPage(1); } else { toast.success(data.message); load(); } } catch (error) { toast.error(error.message); } };
   const toggleInvitation = (id) => setSelectedInvitationIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
   const toggleAllInvitations = () => setSelectedInvitationIds((current) => current.length === invitations.length ? [] : invitations.map((item) => item.id));
   const confirmInvitationDelete = (ids) => setDeleteInvitationIds(ids);
@@ -278,9 +302,9 @@ export function RequestsView({ token, isAdmin, subunits }) {
     {!isAdmin && <div className="planner-actions"><select value={target} onChange={(event) => setTarget(event.target.value)}><option value="">Choose a new unit</option>{subunits.map((unit) => <option key={unit.id} value={unit.id}>{unit.name}</option>)}</select><button disabled={!target} onClick={submitSwitch}>Submit request</button></div>}
     {isAdmin && <form className="inline-tool-form" onSubmit={invite}><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Member email" required /><button>Generate invitation</button></form>}
     <h3>Unit switch requests</h3><div className="request-list">{requests.map((item) => <div key={item.id} className="request-row"><div><strong>{item.member?.user?.name || "My request"}</strong><small>{item.fromSubunit.name} → {item.toSubunit.name}</small></div><span className="status-pill">{item.status}</span>{isAdmin && item.status === "pending" && <div><button onClick={() => decide(item.id, "approved")}>Approve</button><button onClick={() => decide(item.id, "rejected")}>Reject</button></div>}</div>)}{!requests.length && <p className="compact-empty">No requests yet.</p>}</div>
-    {isAdmin && <><div className="invitation-heading"><h3>Invitations</h3><span>{invitations.length} total</span></div>
+    {isAdmin && <><div className="invitation-heading"><h3>Invitations</h3><span>{invitationPagination.totalCount} total</span></div>
       {!!invitations.length && <div className="invitation-bulk-bar">
-        <label><input type="checkbox" checked={selectedInvitationIds.length === invitations.length} onChange={toggleAllInvitations} /> Select all</label>
+        <label><input type="checkbox" checked={selectedInvitationIds.length === invitations.length} onChange={toggleAllInvitations} /> Select this page</label>
         <span>{selectedInvitationIds.length} selected</span>
         <button type="button" className="bulk-delete-button" disabled={!selectedInvitationIds.length} onClick={() => confirmInvitationDelete(selectedInvitationIds)}>Delete selected</button>
       </div>}
@@ -290,6 +314,11 @@ export function RequestsView({ token, isAdmin, subunits }) {
         <span className="status-pill">{item.status}</span><small>Expires {new Date(item.expiresAt).toLocaleDateString()}</small>
         <div className="invitation-actions">{item.status === "pending" && <><button onClick={() => invitationAction(item.id, "resend")}>Resend</button><button onClick={() => invitationAction(item.id, "revoke")}>Revoke</button></>}<button className="row-delete-button" onClick={() => confirmInvitationDelete([item.id])}>Delete</button></div>
       </div>)}{!invitations.length && <p className="compact-empty">No invitations yet.</p>}</div>
+      {invitationPagination.totalCount > 0 && <nav className="invitation-pagination" aria-label="Invitation pages">
+        <button type="button" disabled={invitationPage <= 1} onClick={() => setInvitationPage((page) => page - 1)}>Previous</button>
+        <span>Page {invitationPagination.page} of {invitationPagination.totalPages}</span>
+        <button type="button" disabled={invitationPage >= invitationPagination.totalPages} onClick={() => setInvitationPage((page) => page + 1)}>Next</button>
+      </nav>}
       {!!deleteInvitationIds.length && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !isDeletingInvitations) setDeleteInvitationIds([]); }}>
         <div className="rename-modal delete-modal" role="alertdialog" aria-modal="true" aria-labelledby="delete-invitations-title" aria-describedby="delete-invitations-description">
           <div className="delete-warning-icon" aria-hidden="true">!</div>

@@ -2,6 +2,7 @@ const { Resend } = require("resend");
 const supabase = require("../config/supabaseClient");
 const { escapeHtml } = require("../utils/html");
 const { passwordResetEmail } = require("../utils/emailTemplates");
+const { summarizeResults } = require("../utils/deliverySummary");
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -35,16 +36,21 @@ const sendLoggedEmail = async ({ churchId, rosterId = null, recipient, eventType
 const notifyRosterPublished = async (req, res) => {
   const { churchId, serviceDate, assignments } = req.body;
   if (!churchId || !/^\d{4}-\d{2}-\d{2}$/.test(serviceDate || "") || !Array.isArray(assignments)) return res.status(400).json({ message: "churchId, a YYYY-MM-DD serviceDate, and assignments are required" });
-  const results = await Promise.all(assignments.map(async ({ rosterId, dutyName, memberName, memberEmail, subunitName }) => {
-    if (!rosterId || !memberEmail) return { rosterId, status: "failed", error: "Invalid assignment payload" };
+  const results = [];
+  for (const { rosterId, dutyName, memberName, memberEmail, subunitName } of assignments) {
+    if (!rosterId || !memberEmail) {
+      results.push({ rosterId, memberEmail, status: "failed", error: "Invalid assignment payload" });
+      continue;
+    }
     const result = await sendLoggedEmail({
       churchId, rosterId, recipient: memberEmail, eventType: "roster-published", idempotencyKey: `${rosterId}:email`,
       subject: `You're scheduled: ${dutyName} on ${serviceDate}`,
       html: `<p>Hi ${escapeHtml(memberName)},</p><p>You've been scheduled for <strong>${escapeHtml(dutyName)}</strong> (${escapeHtml(subunitName)}) on <strong>${escapeHtml(serviceDate)}</strong>.</p><p>See you there!</p>`,
     });
-    return { rosterId, ...result };
-  }));
-  return res.json({ message: `Processed ${assignments.length} notifications`, results });
+    results.push({ rosterId, memberEmail, ...result });
+  }
+  const summary = summarizeResults(results);
+  return res.json({ message: `Processed ${assignments.length} task emails`, summary, results });
 };
 
 const notifyInvitation = async (req, res) => {

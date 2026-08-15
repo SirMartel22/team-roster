@@ -5,6 +5,12 @@ const { notify } = require("../services/notificationClient");
 const { buildInvitationUrl } = require("../utils/invitationUrl");
 
 const hashToken = (token) => crypto.createHash("sha256").update(token).digest("hex");
+const INVITATION_PAGE_SIZE = 10;
+
+const parseInvitationPage = (value) => {
+  const page = Number.parseInt(value, 10);
+  return Number.isInteger(page) && page > 0 ? page : 1;
+};
 
 const normalizeInvitationIds = (ids) => {
   if (!Array.isArray(ids)) return [];
@@ -13,8 +19,26 @@ const normalizeInvitationIds = (ids) => {
 
 const listInvitations = async (req, res) => {
   try {
-    const invitations = await prisma.invitation.findMany({ where: { churchId: req.user.churchId }, orderBy: { createdAt: "desc" } });
-    return res.json({ invitations: invitations.map(({ tokenHash, ...invitation }) => invitation) });
+    const page = parseInvitationPage(req.query?.page);
+    const where = { churchId: req.user.churchId };
+    const [invitations, totalCount] = await Promise.all([
+      prisma.invitation.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * INVITATION_PAGE_SIZE,
+        take: INVITATION_PAGE_SIZE,
+      }),
+      prisma.invitation.count({ where }),
+    ]);
+    return res.json({
+      invitations: invitations.map(({ tokenHash, ...invitation }) => invitation),
+      pagination: {
+        page,
+        pageSize: INVITATION_PAGE_SIZE,
+        totalCount,
+        totalPages: Math.max(1, Math.ceil(totalCount / INVITATION_PAGE_SIZE)),
+      },
+    });
   } catch (error) {
     console.error("Failed to list invitations", error);
     return res.status(500).json({ message: "Failed to list invitations" });
@@ -109,4 +133,4 @@ const deleteInvitations = async (req, res) => {
   }
 };
 
-module.exports = { listInvitations, createInvitation, revokeInvitation, resendInvitation, deleteInvitations, normalizeInvitationIds };
+module.exports = { listInvitations, createInvitation, revokeInvitation, resendInvitation, deleteInvitations, normalizeInvitationIds, parseInvitationPage, INVITATION_PAGE_SIZE };

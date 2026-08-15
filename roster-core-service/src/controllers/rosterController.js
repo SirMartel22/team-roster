@@ -1,9 +1,8 @@
 const prisma = require("../config/prismaClient");
 const { generateRosterForDate } = require("../services/schedulingService");
 const { recordAudit } = require("../services/auditService");
+const { notify } = require("../services/notificationClient");
 const { parseDateOnly } = require("../utils/date");
-
-const NOTIFICATION_SERVICE_URL = process.env.NOTIFICATION_SERVICE_URL;
 
 const rosterInclude = {
   duty: { include: { subunit: true } },
@@ -88,21 +87,17 @@ const publishRoster = async (req, res) => {
     }
 
     const assignments = rosterEntries.map((entry) => ({ rosterId: entry.id, dutyName: entry.duty.name, subunitName: entry.duty.subunit.name, memberName: entry.member.user.name, memberEmail: entry.member.user.email }));
-    let notificationResults = { message: "Notification service is not configured", results: [] };
-    if (NOTIFICATION_SERVICE_URL) {
-      try {
-        const notifyResponse = await fetch(`${NOTIFICATION_SERVICE_URL}/notify/roster-published`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-Service-Key": process.env.NOTIFICATION_SERVICE_KEY || "" },
-          body: JSON.stringify({ churchId: req.user.churchId, serviceDate: req.body.serviceDate, assignments }),
-        });
-        const body = await notifyResponse.json().catch(() => ({}));
-        notificationResults = notifyResponse.ok ? body : { message: body.message || "Notification delivery failed", results: [], retryable: true };
-      } catch (notificationError) {
-        notificationResults = { message: notificationError.message, results: [], retryable: true };
-      }
-    }
-    return res.json({ message: alreadyPublished ? "Roster was already published; notifications were retried" : `Roster for ${req.body.serviceDate} published`, alreadyPublished, notificationResults });
+    const notification = await notify("/notify/roster-published", {
+      churchId: req.user.churchId,
+      serviceDate: req.body.serviceDate,
+      assignments,
+    });
+    return res.json({
+      message: alreadyPublished ? "Roster was already published; task emails were retried" : `Roster for ${req.body.serviceDate} published`,
+      alreadyPublished,
+      assignmentCount: assignments.length,
+      notification,
+    });
   } catch (error) {
     console.error("Error publishing roster", error);
     return res.status(500).json({ message: "Failed to publish roster" });

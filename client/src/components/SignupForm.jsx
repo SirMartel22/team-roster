@@ -4,7 +4,10 @@ import { useToast } from "../context/toastContext";
 export function SignupForm({ onSignupComplete, invitationToken }) {
   const [fields, setFields] = useState({ churchId: "", subunitId: "", name: "", email: "", password: "", phone: "", whatsapp: "" });
   const [workspaceName, setWorkspaceName] = useState("");
+  const [workspaceSlug, setWorkspaceSlug] = useState("");
   const [subunits, setSubunits] = useState([]);
+  const [isLoadingInvitation, setIsLoadingInvitation] = useState(Boolean(invitationToken));
+  const [invitationError, setInvitationError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const toast = useToast();
 
@@ -18,10 +21,12 @@ export function SignupForm({ onSignupComplete, invitationToken }) {
         if (!response.ok) throw new Error(data.message);
         const workspace = data.invitation.workspace;
         setWorkspaceName(workspace.name);
+        setWorkspaceSlug(workspace.slug);
         setSubunits(workspace.subunits || []);
         setFields((current) => ({ ...current, churchId: workspace.id, email: data.invitation.email }));
       })
-      .catch((requestError) => toast.error(requestError.message));
+      .catch((requestError) => { setInvitationError(requestError.message); toast.error(requestError.message); })
+      .finally(() => setIsLoadingInvitation(false));
   }, [invitationToken, toast]);
 
   async function handleSubmit(event) {
@@ -39,8 +44,8 @@ export function SignupForm({ onSignupComplete, invitationToken }) {
       });
       const registerData = await registerResponse.json();
       if (!registerResponse.ok) throw new Error(registerData.message || "Registration failed");
-      toast.success("Your account is ready. Sign in to continue.");
-      onSignupComplete?.();
+      await onSignupComplete?.({ workspaceSlug, email, password });
+      toast.success("Your account is ready. Welcome to your workspace.");
     } catch (requestError) {
       toast.error(requestError.message);
     } finally {
@@ -54,6 +59,14 @@ export function SignupForm({ onSignupComplete, invitationToken }) {
         <div className="auth-form-header"><p className="eyebrow">Member registration</p><h1>An invitation is required</h1><p className="auth-subtitle">Ask your organisation administrator to send you a single-use invitation link.</p></div>
       </div>
     );
+  }
+
+  if (isLoadingInvitation) {
+    return <div className="auth-form"><div className="auth-form-header"><p className="eyebrow">Member registration</p><h1>Checking your invitation…</h1><p className="auth-subtitle">We’re securely connecting you to the organisation that invited you.</p></div></div>;
+  }
+
+  if (invitationError) {
+    return <div className="auth-form"><div className="auth-form-header"><p className="eyebrow">Member registration</p><h1>This invitation cannot be used</h1><p className="auth-subtitle">{invitationError}. Ask your organisation administrator to send a new invitation.</p></div></div>;
   }
 
   return (

@@ -12,10 +12,28 @@ import "./auth.css";
 import "./landing.css";
 
 const AppContent = () => {
-  const { user, isInitializing, logout } = useContext(AuthContext);
-  const inviteToken = new URLSearchParams(window.location.search).get("invite");
-  const resetToken = new URLSearchParams(window.location.search).get("reset");
-  const [screen, setScreen] = useState(resetToken ? "reset-password" : inviteToken ? "signup" : "landing");
+  const { user, isInitializing, login, logout } = useContext(AuthContext);
+  const [inviteToken, setInviteToken] = useState(() => new URLSearchParams(window.location.search).get("invite"));
+  const [resetToken] = useState(() => new URLSearchParams(window.location.search).get("reset"));
+  const [screen, setScreen] = useState(() => resetToken ? "reset-password" : inviteToken ? "signup" : "landing");
+
+  const clearLinkState = () => window.history.replaceState({}, "", "/");
+
+  const navigate = (nextScreen) => {
+    if (screen === "signup" && nextScreen !== "signup") {
+      setInviteToken(null);
+      clearLinkState();
+    }
+    setScreen(nextScreen);
+  };
+
+  const finishInvitationSignup = async ({ workspaceSlug, email, password }) => {
+    if (user) await logout();
+    await login(workspaceSlug, email, password);
+    setInviteToken(null);
+    clearLinkState();
+    setScreen("login");
+  };
 
   const finishPasswordReset = async () => {
     await logout();
@@ -32,10 +50,10 @@ const AppContent = () => {
     );
   }
 
-  if (user && screen !== "reset-password") return <Dashboard />;
+  if (user && screen !== "reset-password" && screen !== "signup") return <Dashboard />;
 
   if (screen === "landing") {
-    return <LandingPage onNavigate={setScreen} />;
+    return <LandingPage onNavigate={navigate} />;
   }
 
   const screenCopy = {
@@ -48,7 +66,7 @@ const AppContent = () => {
 
   return (
     <main className="auth-page">
-      <button className="auth-back" type="button" onClick={() => setScreen("landing")}>
+      <button className="auth-back" type="button" onClick={() => navigate("landing")}>
         ← Back to home
       </button>
       <section className="auth-layout">
@@ -66,17 +84,17 @@ const AppContent = () => {
         </aside>
         <div className="auth-card">
           <div className="auth-card-content">
-            {screen === "login" && <LoginForm onForgotPassword={() => setScreen("forgot-password")} />}
-            {screen === "signup" && <SignupForm invitationToken={inviteToken} onSignupComplete={() => setScreen("login")} />}
+            {screen === "login" && <LoginForm onForgotPassword={() => navigate("forgot-password")} />}
+            {screen === "signup" && <SignupForm invitationToken={inviteToken} onSignupComplete={finishInvitationSignup} />}
             {screen === "team" && <CreateTeamForm />}
-            {screen === "forgot-password" && <ForgotPasswordForm onBack={() => setScreen("login")} />}
+            {screen === "forgot-password" && <ForgotPasswordForm onBack={() => navigate("login")} />}
             {screen === "reset-password" && <ResetPasswordForm token={resetToken} onComplete={finishPasswordReset} />}
 
             <div className="auth-toggle">
               {screen === "login" ? (
-                <><span>New to Rosterly?</span><button type="button" onClick={() => setScreen("signup")}>Join a team</button></>
+                <><span>New to Rosterly?</span><button type="button" onClick={() => navigate("signup")}>Join a team</button></>
               ) : (
-                <><span>Already have an account?</span><button type="button" onClick={() => setScreen("login")}>Sign in</button></>
+                <><span>Already have an account?</span><button type="button" onClick={() => navigate("login")}>Sign in</button></>
               )}
             </div>
           </div>

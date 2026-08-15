@@ -5,7 +5,7 @@ const { buildInvitationUrl } = require("../src/utils/invitationUrl");
 test("invitation URL uses the configured client origin", () => {
   assert.equal(
     buildInvitationUrl("secret-token", "https://team-roster-front-end.vercel.app"),
-    "https://team-roster-front-end.vercel.app/?invite=secret-token",
+    "https://team-roster-front-end.vercel.app/join?invite=secret-token",
   );
 });
 

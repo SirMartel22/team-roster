@@ -219,22 +219,30 @@ export function RequestsView({ token, isAdmin, subunits }) {
   const [invitations, setInvitations] = useState([]);
   const [target, setTarget] = useState("");
   const [email, setEmail] = useState("");
+  const [selectedInvitationIds, setSelectedInvitationIds] = useState([]);
+  const [deleteInvitationIds, setDeleteInvitationIds] = useState([]);
+  const [isDeletingInvitations, setIsDeletingInvitations] = useState(false);
+  const applyInvitations = useCallback((nextInvitations) => {
+    setInvitations(nextInvitations);
+    const visibleIds = new Set(nextInvitations.map((item) => item.id));
+    setSelectedInvitationIds((current) => current.filter((id) => visibleIds.has(id)));
+  }, []);
   const load = useCallback(async () => {
     try {
       const data = await request("/subunit-switch-requests", token); setRequests(data.requests || []);
-      if (isAdmin) { const inviteData = await request("/invitations", token); setInvitations(inviteData.invitations || []); }
+      if (isAdmin) { const inviteData = await request("/invitations", token); applyInvitations(inviteData.invitations || []); }
     } catch (error) { toast.error(error.message); }
-  }, [token, isAdmin, toast]);
+  }, [token, isAdmin, toast, applyInvitations]);
   useEffect(() => {
     request("/subunit-switch-requests", token)
       .then((data) => setRequests(data.requests || []))
       .catch((error) => toast.error(error.message));
     if (isAdmin) {
       request("/invitations", token)
-        .then((data) => setInvitations(data.invitations || []))
+        .then((data) => applyInvitations(data.invitations || []))
         .catch((error) => toast.error(error.message));
     }
-  }, [token, isAdmin, toast]);
+  }, [token, isAdmin, toast, applyInvitations]);
   const reportInvitation = (data) => {
     logInvitationUrl(data.inviteUrl);
     const delivery = data.notification?.data?.result;
@@ -251,11 +259,46 @@ export function RequestsView({ token, isAdmin, subunits }) {
   const decide = async (id, status) => { try { await request(`/subunit-switch-requests/${id}`, token, { method: "PATCH", body: JSON.stringify({ status }) }); toast.success(`Request ${status}.`); load(); } catch (error) { toast.error(error.message); } };
   const invite = async (event) => { event.preventDefault(); try { const data = await request("/invitations", token, { method: "POST", body: JSON.stringify({ email }) }); setEmail(""); reportInvitation(data); load(); } catch (error) { toast.error(error.message); } };
   const invitationAction = async (id, action) => { try { const data = await request(`/invitations/${id}${action === "resend" ? "/resend" : ""}`, token, { method: action === "revoke" ? "DELETE" : "POST" }); if (action === "resend") reportInvitation(data); else toast.success(data.message); load(); } catch (error) { toast.error(error.message); } };
+  const toggleInvitation = (id) => setSelectedInvitationIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+  const toggleAllInvitations = () => setSelectedInvitationIds((current) => current.length === invitations.length ? [] : invitations.map((item) => item.id));
+  const confirmInvitationDelete = (ids) => setDeleteInvitationIds(ids);
+  const deleteSelectedInvitations = async () => {
+    if (!deleteInvitationIds.length || isDeletingInvitations) return;
+    setIsDeletingInvitations(true);
+    try {
+      const data = await request("/invitations/bulk-delete", token, { method: "POST", body: JSON.stringify({ ids: deleteInvitationIds }) });
+      toast.success(data.message);
+      setDeleteInvitationIds([]);
+      setSelectedInvitationIds((current) => current.filter((id) => !deleteInvitationIds.includes(id)));
+      await load();
+    } catch (error) { toast.error(error.message); }
+    finally { setIsDeletingInvitations(false); }
+  };
   return <section className="panel full-panel workspace-tool"><div className="view-heading"><div><p className="eyebrow">REQUESTS</p><h2>{isAdmin ? "Membership requests and invitations" : "Change work unit"}</h2></div></div>
     {!isAdmin && <div className="planner-actions"><select value={target} onChange={(event) => setTarget(event.target.value)}><option value="">Choose a new unit</option>{subunits.map((unit) => <option key={unit.id} value={unit.id}>{unit.name}</option>)}</select><button disabled={!target} onClick={submitSwitch}>Submit request</button></div>}
     {isAdmin && <form className="inline-tool-form" onSubmit={invite}><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Member email" required /><button>Generate invitation</button></form>}
     <h3>Unit switch requests</h3><div className="request-list">{requests.map((item) => <div key={item.id} className="request-row"><div><strong>{item.member?.user?.name || "My request"}</strong><small>{item.fromSubunit.name} → {item.toSubunit.name}</small></div><span className="status-pill">{item.status}</span>{isAdmin && item.status === "pending" && <div><button onClick={() => decide(item.id, "approved")}>Approve</button><button onClick={() => decide(item.id, "rejected")}>Reject</button></div>}</div>)}{!requests.length && <p className="compact-empty">No requests yet.</p>}</div>
-    {isAdmin && <><h3>Invitations</h3><div className="request-list">{invitations.map((item) => <div key={item.id} className="request-row"><strong>{item.email}</strong><span className="status-pill">{item.status}</span><small>Expires {new Date(item.expiresAt).toLocaleDateString()}</small>{item.status === "pending" && <div><button onClick={() => invitationAction(item.id, "resend")}>Resend</button><button onClick={() => invitationAction(item.id, "revoke")}>Revoke</button></div>}</div>)}</div></>}
+    {isAdmin && <><div className="invitation-heading"><h3>Invitations</h3><span>{invitations.length} total</span></div>
+      {!!invitations.length && <div className="invitation-bulk-bar">
+        <label><input type="checkbox" checked={selectedInvitationIds.length === invitations.length} onChange={toggleAllInvitations} /> Select all</label>
+        <span>{selectedInvitationIds.length} selected</span>
+        <button type="button" className="bulk-delete-button" disabled={!selectedInvitationIds.length} onClick={() => confirmInvitationDelete(selectedInvitationIds)}>Delete selected</button>
+      </div>}
+      <div className="request-list invitation-list">{invitations.map((item) => <div key={item.id} className={`request-row invitation-row${selectedInvitationIds.includes(item.id) ? " selected" : ""}`}>
+        <label className="invitation-checkbox"><input type="checkbox" checked={selectedInvitationIds.includes(item.id)} onChange={() => toggleInvitation(item.id)} aria-label={`Select invitation for ${item.email}`} /></label>
+        <div className="invitation-identity"><strong>{item.email}</strong><small>Created {new Date(item.createdAt).toLocaleDateString()}</small></div>
+        <span className="status-pill">{item.status}</span><small>Expires {new Date(item.expiresAt).toLocaleDateString()}</small>
+        <div className="invitation-actions">{item.status === "pending" && <><button onClick={() => invitationAction(item.id, "resend")}>Resend</button><button onClick={() => invitationAction(item.id, "revoke")}>Revoke</button></>}<button className="row-delete-button" onClick={() => confirmInvitationDelete([item.id])}>Delete</button></div>
+      </div>)}{!invitations.length && <p className="compact-empty">No invitations yet.</p>}</div>
+      {!!deleteInvitationIds.length && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !isDeletingInvitations) setDeleteInvitationIds([]); }}>
+        <div className="rename-modal delete-modal" role="alertdialog" aria-modal="true" aria-labelledby="delete-invitations-title" aria-describedby="delete-invitations-description">
+          <div className="delete-warning-icon" aria-hidden="true">!</div>
+          <div className="rename-modal-header"><div><p className="eyebrow">INVITATION HISTORY</p><h2 id="delete-invitations-title">Delete {deleteInvitationIds.length === 1 ? "this invitation" : `${deleteInvitationIds.length} invitations`}?</h2></div><button type="button" className="modal-close" onClick={() => setDeleteInvitationIds([])} disabled={isDeletingInvitations} aria-label="Close delete dialog">×</button></div>
+          <p className="rename-modal-copy" id="delete-invitations-description">This permanently removes the selected invitation records. Any selected pending invitation links will stop working.</p>
+          <div className="rename-modal-actions"><button type="button" className="secondary-button" onClick={() => setDeleteInvitationIds([])} disabled={isDeletingInvitations}>Cancel</button><button type="button" className="danger-button" onClick={deleteSelectedInvitations} disabled={isDeletingInvitations}>{isDeletingInvitations ? "Deleting…" : "Delete permanently"}</button></div>
+        </div>
+      </div>}
+    </>}
   </section>;
 }
 

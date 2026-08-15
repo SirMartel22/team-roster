@@ -6,6 +6,11 @@ const { buildInvitationUrl } = require("../utils/invitationUrl");
 
 const hashToken = (token) => crypto.createHash("sha256").update(token).digest("hex");
 
+const normalizeInvitationIds = (ids) => {
+  if (!Array.isArray(ids)) return [];
+  return [...new Set(ids.filter((id) => typeof id === "string" && id.trim()).map((id) => id.trim()))];
+};
+
 const listInvitations = async (req, res) => {
   try {
     const invitations = await prisma.invitation.findMany({ where: { churchId: req.user.churchId }, orderBy: { createdAt: "desc" } });
@@ -80,4 +85,28 @@ const resendInvitation = async (req, res) => {
   }
 };
 
-module.exports = { listInvitations, createInvitation, revokeInvitation, resendInvitation };
+const deleteInvitations = async (req, res) => {
+  const ids = normalizeInvitationIds(req.body?.ids);
+  if (!ids.length) return res.status(400).json({ message: "Select at least one invitation to delete" });
+  try {
+    const result = await prisma.invitation.deleteMany({
+      where: { churchId: req.user.churchId, id: { in: ids } },
+    });
+    await recordAudit({
+      churchId: req.user.churchId,
+      actorUserId: req.user.userId,
+      action: "invitation.deleted",
+      entityType: "invitation",
+      metadata: { requestedIds: ids, deletedCount: result.count },
+    });
+    return res.json({
+      message: `${result.count} ${result.count === 1 ? "invitation" : "invitations"} deleted`,
+      deletedCount: result.count,
+    });
+  } catch (error) {
+    console.error("Failed to delete invitations", error);
+    return res.status(500).json({ message: "Failed to delete invitations" });
+  }
+};
+
+module.exports = { listInvitations, createInvitation, revokeInvitation, resendInvitation, deleteInvitations, normalizeInvitationIds };

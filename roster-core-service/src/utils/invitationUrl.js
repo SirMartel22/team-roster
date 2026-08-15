@@ -23,6 +23,9 @@ const buildInvitationUrl = (
     throw error;
   }
 
+  url.pathname = `${url.pathname.replace(/\/+$/, "")}/join`;
+  url.search = "";
+  url.hash = "";
   url.searchParams.set("invite", token);
   return url.toString();
 };

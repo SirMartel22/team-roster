@@ -35,17 +35,10 @@ export function SignupForm({ onSignupComplete, invitationToken }) {
     try {
       const registerResponse = await fetch(`${import.meta.env.VITE_AUTH_SERVICE_URL}/register`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password, invitationToken }),
+        body: JSON.stringify({ name, email, password, invitationToken, subunitId, phone: phone.trim(), whatsapp: whatsapp.trim() }),
       });
       const registerData = await registerResponse.json();
       if (!registerResponse.ok) throw new Error(registerData.message || "Registration failed");
-
-      const memberResponse = await fetch(`${import.meta.env.VITE_ROSTER_SERVICE_URL}/members`, {
-        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${registerData.token}` },
-        body: JSON.stringify({ subunitId, phone: phone.trim(), whatsapp: whatsapp.trim() }),
-      });
-      const memberData = await memberResponse.json();
-      if (!memberResponse.ok) throw new Error(`Your account was created, but joining the team failed: ${memberData.message}`);
       toast.success("Your account is ready. Sign in to continue.");
       onSignupComplete?.();
     } catch (requestError) {

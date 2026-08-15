@@ -7,6 +7,7 @@ process.env.SUPABASE_KEY ||= "test-key";
 process.env.JWT_SECRET ||= "test-secret";
 
 const { createAuthHandlers } = require("../src/controllers/authController");
+const subunitId = "11111111-1111-4111-8111-111111111111";
 
 const resultQuery = (result, calls) => {
   const query = {
@@ -89,13 +90,13 @@ test("workspace creation uses the atomic database operation", async () => {
   assert.equal(rpcCalls[0][1].p_email, "admin@example.com");
 });
 
-test("invited registration atomically derives the tenant and consumes the token", async () => {
+test("invited registration atomically creates the user and member profile", async () => {
   const rpcCalls = [];
   const supabaseClient = {
     rpc(name, parameters) {
       rpcCalls.push([name, parameters]);
       return resultQuery({
-        data: { id: "user-1", email: "invitee@example.com", name: "Invitee", role: "member", church_id: "invited-church", created_at: "2026-08-14T00:00:00Z" },
+        data: { id: "user-1", email: "invitee@example.com", name: "Invitee", role: "member", church_id: "invited-church", created_at: "2026-08-14T00:00:00Z", member_id: "member-1" },
         error: null,
       });
     },
@@ -109,6 +110,9 @@ test("invited registration atomically derives the tenant and consumes the token"
     email: "INVITEE@EXAMPLE.COM",
     password: "password",
     name: "Invitee",
+    subunitId,
+    phone: " +234 801 234 5678 ",
+    whatsapp: " +234 809 876 5432 ",
   } }, res);
 
   assert.equal(res.statusCode, 201);
@@ -116,6 +120,9 @@ test("invited registration atomically derives the tenant and consumes the token"
   assert.equal(rpcCalls[0][0], "register_invited_user");
   assert.equal(rpcCalls[0][1].p_token_hash, crypto.createHash("sha256").update("single-use-token").digest("hex"));
   assert.equal(rpcCalls[0][1].p_email, "invitee@example.com");
+  assert.equal(rpcCalls[0][1].p_subunit_id, subunitId);
+  assert.equal(rpcCalls[0][1].p_phone, "+234 801 234 5678");
+  assert.equal(rpcCalls[0][1].p_whatsapp, "+234 809 876 5432");
   assert.equal("p_church_id" in rpcCalls[0][1], false);
 });
 
@@ -128,10 +135,32 @@ test("an already-used invitation is rejected without issuing a token", async () 
   const { register } = createAuthHandlers(dependencies(supabaseClient));
   const res = responseRecorder();
 
-  await register({ body: { invitationToken: "used", email: "invitee@example.com", password: "password", name: "Invitee" } }, res);
+  await register({ body: {
+    invitationToken: "used", email: "invitee@example.com", password: "password", name: "Invitee",
+    subunitId, phone: "+2348012345678", whatsapp: "+2348098765432",
+  } }, res);
 
   assert.equal(res.statusCode, 400);
   assert.match(res.body.message, /already used/i);
+  assert.equal(res.body.token, undefined);
+});
+
+test("an invalid or cross-tenant subunit is rejected without issuing a token", async () => {
+  const supabaseClient = {
+    rpc() {
+      return resultQuery({ data: null, error: { code: "P0001", message: "SUBUNIT_INVALID" } });
+    },
+  };
+  const { register } = createAuthHandlers(dependencies(supabaseClient));
+  const res = responseRecorder();
+
+  await register({ body: {
+    invitationToken: "valid-token", email: "invitee@example.com", password: "password", name: "Invitee",
+    subunitId: "22222222-2222-4222-8222-222222222222", phone: "+2348012345678", whatsapp: "+2348098765432",
+  } }, res);
+
+  assert.equal(res.statusCode, 400);
+  assert.match(res.body.message, /valid work unit/i);
   assert.equal(res.body.token, undefined);
 });
 
@@ -139,7 +168,10 @@ test("public registration without an invitation is rejected", async () => {
   const { register } = createAuthHandlers(dependencies({}));
   const res = responseRecorder();
 
-  await register({ body: { churchId: "client-selected-church", email: "member@example.com", password: "password", name: "Member" } }, res);
+  await register({ body: {
+    churchId: "client-selected-church", email: "member@example.com", password: "password", name: "Member",
+    subunitId, phone: "+2348012345678", whatsapp: "+2348098765432",
+  } }, res);
 
   assert.equal(res.statusCode, 400);
   assert.match(res.body.message, /invitation/i);

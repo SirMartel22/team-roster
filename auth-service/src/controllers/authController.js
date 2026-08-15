@@ -6,6 +6,7 @@ const { toUserDto } = require("../utils/userDto");
 const { toSlug } = require("../utils/slug");
 
 const normalizeEmail = (email) => email.trim().toLowerCase();
+const isUuid = (value) => typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 
 const createAuthHandlers = ({
   supabaseClient = supabase,
@@ -21,12 +22,15 @@ const createAuthHandlers = ({
   }, jwtSecret, { expiresIn: "30d" });
 
   const register = async (req, res) => {
-    const { password, name, invitationToken } = req.body;
+    const { password, name, invitationToken, subunitId, phone, whatsapp } = req.body;
     const email = typeof req.body.email === "string" ? normalizeEmail(req.body.email) : "";
+    const memberName = typeof name === "string" ? name.trim() : "";
+    const phoneNumber = typeof phone === "string" ? phone.trim() : "";
+    const whatsappNumber = typeof whatsapp === "string" ? whatsapp.trim() : "";
 
-    if (!email || !password || !name || !invitationToken) {
+    if (!email || !password || !memberName || !invitationToken || !isUuid(subunitId) || phoneNumber.length < 7 || whatsappNumber.length < 7) {
       return res.status(400).json({
-        message: "A valid invitation, email, password, and name are required",
+        message: "A valid invitation, work unit, email, password, name, phone, and WhatsApp number are required",
       });
     }
 
@@ -37,7 +41,10 @@ const createAuthHandlers = ({
         p_token_hash: tokenHash,
         p_email: email,
         p_password_hash: passwordHash,
-        p_name: name,
+        p_name: memberName,
+        p_subunit_id: subunitId,
+        p_phone: phoneNumber,
+        p_whatsapp: whatsappNumber,
       }).single();
 
       if (error || !user) {
@@ -47,6 +54,9 @@ const createAuthHandlers = ({
         }
         if (detail.includes("INVITATION_INVALID")) {
           return res.status(400).json({ message: "Invitation is invalid, expired, or already used" });
+        }
+        if (detail.includes("SUBUNIT_INVALID")) {
+          return res.status(400).json({ message: "Select a valid work unit from the invited workspace" });
         }
         if (error?.code === "23505") {
           return res.status(409).json({ message: "An account with this email already exists" });

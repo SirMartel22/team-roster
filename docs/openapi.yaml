@@ -75,15 +75,18 @@ paths:
           application/json:
             schema:
               type: object
-              required: [invitationToken, name, email, password]
+              required: [invitationToken, name, email, password, subunitId, phone, whatsapp]
               properties:
                 invitationToken: { type: string }
                 name: { type: string }
                 email: { type: string, format: email }
                 password: { type: string, format: password }
+                subunitId: { type: string, format: uuid }
+                phone: { type: string, minLength: 7 }
+                whatsapp: { type: string, minLength: 7 }
       responses:
-        '201': { description: JWT and canonical user returned }
-        '400': { description: Invalid, expired, reused, or email-mismatched invitation }
+        '201': { description: User and member profile created atomically; JWT and canonical user returned }
+        '400': { description: Invalid profile data, subunit, expired/reused invitation, or email mismatch }
   /me:
     get:
       security: [{ bearerAuth: [] }]

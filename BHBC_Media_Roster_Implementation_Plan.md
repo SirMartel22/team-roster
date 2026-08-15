@@ -4,7 +4,30 @@
 **Source:** `BHBC_Media_Roster_Project_Status.md` reconciled with the current repository  
 **Purpose:** Review and approve the next implementation sequence before feature work resumes
 
-**Local implementation status (updated August 14, 2026):** Core roadmap features are implemented. The authentication stabilization pass repaired fresh login and workspace creation, made workspace/admin creation transactional, made invited registration and invitation consumption transactional, removed public organisation/subunit enumeration, and added controller regression tests. Local automated verification passes, but database migration, database-backed two-tenant acceptance, production configuration, backup validation, and deployment remain controlled operational steps. The MVP is implementation-complete locally but is not release-approved until those operational gates pass.
+**Local implementation status (updated August 15, 2026):** Core roadmap features are implemented. The current onboarding hardening slice makes invited user creation, member-profile creation, invitation consumption, and tenant/subunit validation one database transaction. Local automated verification passes, but the new migration, database-backed two-tenant acceptance, production configuration, backup validation, and deployment remain controlled operational steps. The MVP is implementation-complete locally but is not release-approved until those operational gates pass.
+
+### Current implementation slice — atomic invited-member onboarding
+
+Problem:
+
+- Invitation acceptance previously created the user and consumed the invitation in one transaction, then relied on the client to create the member profile through a second service call.
+- A failure during that second call left a valid user without a member profile and an already-consumed invitation.
+
+Implementation:
+
+1. Replace the four-argument `register_invited_user` database function with a seven-argument version accepting the selected subunit, phone, and WhatsApp number.
+2. Lock and validate the invitation, validate that the selected subunit belongs to the invited organisation, create both user and member rows, and consume the invitation in one transaction.
+3. Update `POST /register` to validate and forward the complete member profile payload.
+4. Remove the client's follow-up `POST /members` request.
+5. Add controller regression tests for the complete RPC contract and invalid-subunit failure.
+6. Update the OpenAPI registration contract and run the repository verification suite.
+
+Acceptance criteria:
+
+- Registration never commits a user without its required member profile.
+- An invalid or cross-tenant subunit leaves the invitation unused and creates no user or member.
+- The browser performs only one registration mutation.
+- Existing environments can upgrade through a forward-only migration.
 
 ---
 

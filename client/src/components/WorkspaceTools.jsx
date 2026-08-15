@@ -14,7 +14,15 @@ async function request(path, token, options = {}) {
   return data;
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => {
+  const value = new Date();
+  const offset = value.getTimezoneOffset() * 60 * 1000;
+  return new Date(value.getTime() - offset).toISOString().slice(0, 10);
+};
+
+const displayServiceDate = (value) => new Date(value).toLocaleDateString(undefined, {
+  weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "UTC",
+});
 
 const logInvitationUrl = (inviteUrl) => {
   if (!inviteUrl) return;
@@ -159,19 +167,22 @@ export function UnitManagement({ token, subunits, members, onChanged }) {
 export function RosterPlanner({ token, members }) {
   const toast = useToast();
   const [date, setDate] = useState(today());
+  const [viewMode, setViewMode] = useState("upcoming");
   const [entries, setEntries] = useState([]);
   const [generationResults, setGenerationResults] = useState([]);
   const [busy, setBusy] = useState(false);
 
-  const load = useCallback(async () => {
-    try { const data = await request(`/rosters?date=${date}`, token); setEntries(data.rosterEntries || []); }
+  const load = useCallback(async (mode = viewMode) => {
+    const query = mode === "upcoming" ? `/rosters?scope=upcoming&from=${today()}` : `/rosters?date=${date}`;
+    try { const data = await request(query, token); setEntries(data.rosterEntries || []); }
     catch (error) { toast.error(error.message); }
-  }, [date, token, toast]);
+  }, [date, token, toast, viewMode]);
   useEffect(() => {
-    request(`/rosters?date=${date}`, token)
+    const query = viewMode === "upcoming" ? `/rosters?scope=upcoming&from=${today()}` : `/rosters?date=${date}`;
+    request(query, token)
       .then((data) => setEntries(data.rosterEntries || []))
       .catch((error) => toast.error(error.message));
-  }, [date, token, toast]);
+  }, [date, token, toast, viewMode]);
 
   const act = async (action) => {
     setBusy(true);
@@ -195,7 +206,8 @@ export function RosterPlanner({ token, members }) {
       } else {
         toast.success(data.message);
       }
-      await load();
+      setViewMode("date");
+      await load("date");
     } catch (error) { toast.error(error.message); }
     finally { setBusy(false); }
   };
@@ -210,24 +222,29 @@ export function RosterPlanner({ token, members }) {
   };
 
   return <section className="panel full-panel workspace-tool"><div className="view-heading"><div><p className="eyebrow">TASK PLANNING</p><h2>Generate, review and publish</h2><p>Assignments remain drafts until you explicitly publish them.</p></div></div>
-    <div className="planner-actions"><input type="date" value={date} onChange={(event) => setDate(event.target.value)} /><button onClick={() => act("generate")} disabled={busy}>Generate draft</button><button className="publish-button" onClick={() => act("publish")} disabled={busy || !entries.length}>Publish roster</button></div>
+    <div className="planner-actions"><input type="date" value={date} onChange={(event) => { setDate(event.target.value); setViewMode("date"); }} /><button type="button" className={viewMode === "upcoming" ? "selected-view" : ""} onClick={() => setViewMode("upcoming")}>Upcoming tasks</button><button onClick={() => act("generate")} disabled={busy}>Generate draft</button><button className="publish-button" onClick={() => act("publish")} disabled={busy || viewMode !== "date" || !entries.length}>Publish roster</button></div>
     {generationResults.filter((result) => result.status !== "assigned" || result.fairnessWarning).map((result) => <p className="tool-warning" key={result.duty.id}>{result.duty.name}: {result.reason || result.fairnessWarning}</p>)}
+    <div className="schedule-list-heading"><h3>{viewMode === "upcoming" ? "Upcoming task log" : `Tasks for ${displayServiceDate(`${date}T00:00:00.000Z`)}`}</h3><span>{entries.length} {entries.length === 1 ? "assignment" : "assignments"}</span></div>
     <div className="roster-table">{entries.map((entry) => {
       const eligible = members.filter((member) => member.subunitId === entry.duty.subunitId && member.isActive !== false);
-      return <div className="roster-row" key={entry.id}><div><strong>{entry.duty.name}</strong><small>{entry.duty.subunit.name} · {entry.status}</small></div>
+      return <div className="roster-row" key={entry.id}><div><strong>{entry.duty.name}</strong><small>{viewMode === "upcoming" ? `${displayServiceDate(entry.serviceDate)} · ` : ""}{entry.duty.subunit.name} · {entry.status}</small></div>
         <select value={entry.memberId} disabled={entry.status === "published"} onChange={(event) => reassign(entry.id, event.target.value)}>{eligible.map((member) => <option value={member.id} key={member.id}>{member.user?.name}</option>)}</select>
         {entry.status === "published" && <div className="attendance-actions"><button className={entry.attended === true ? "selected" : ""} onClick={() => attendance(entry.id, true)}>Present</button><button className={entry.attended === false ? "selected danger" : ""} onClick={() => attendance(entry.id, false)}>Absent</button></div>}
       </div>;
-    })}{!entries.length && <p className="compact-empty">No assignments for this date.</p>}</div>
+    })}{!entries.length && <p className="compact-empty">{viewMode === "upcoming" ? "No upcoming assignments yet." : "No assignments for this date."}</p>}</div>
   </section>;
 }
 
 export function MemberAssignments({ token }) {
   const toast = useToast();
   const [date, setDate] = useState(today());
+  const [viewMode, setViewMode] = useState("upcoming");
   const [entries, setEntries] = useState([]);
-  useEffect(() => { request(`/rosters?date=${date}`, token).then((data) => setEntries(data.rosterEntries || [])).catch((error) => toast.error(error.message)); }, [date, token, toast]);
-  return <section className="panel full-panel workspace-tool"><div className="view-heading"><div><p className="eyebrow">MY SCHEDULE</p><h2>Published assignments</h2><p>Choose a service date to view your assignment.</p></div><input type="date" value={date} onChange={(event) => setDate(event.target.value)} /></div><div className="roster-table">{entries.map((entry) => <div className="roster-row" key={entry.id}><div><strong>{entry.duty.name}</strong><small>{entry.duty.subunit.name}</small></div><span className="status-pill">Published</span></div>)}{!entries.length && <p className="compact-empty">No published assignment for this date.</p>}</div></section>;
+  useEffect(() => {
+    const query = viewMode === "upcoming" ? `/rosters?scope=upcoming&from=${today()}` : `/rosters?date=${date}`;
+    request(query, token).then((data) => setEntries(data.rosterEntries || [])).catch((error) => toast.error(error.message));
+  }, [date, token, toast, viewMode]);
+  return <section className="panel full-panel workspace-tool"><div className="view-heading"><div><p className="eyebrow">MY SCHEDULE</p><h2>{viewMode === "upcoming" ? "Upcoming assignments" : "Published assignments"}</h2><p>{viewMode === "upcoming" ? "Your published tasks from today onward." : "Viewing your published assignment for a specific service date."}</p></div><div className="member-schedule-filter"><input type="date" value={date} onChange={(event) => { setDate(event.target.value); setViewMode("date"); }} /><button type="button" onClick={() => setViewMode("upcoming")}>Upcoming tasks</button></div></div><div className="roster-table">{entries.map((entry) => <div className="roster-row" key={entry.id}><div><strong>{entry.duty.name}</strong><small>{viewMode === "upcoming" ? `${displayServiceDate(entry.serviceDate)} · ` : ""}{entry.duty.subunit.name}</small></div><span className="status-pill">Published</span></div>)}{!entries.length && <p className="compact-empty">{viewMode === "upcoming" ? "You have no upcoming published assignments." : "No published assignment for this date."}</p>}</div></section>;
 }
 
 export function RequestsView({ token, isAdmin, subunits }) {

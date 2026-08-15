@@ -40,6 +40,12 @@
 .tool-warning { background: #fff6df; color: #765a10; }
 .planner-actions { align-items: center; }
 .planner-actions .publish-button { background: #b86c2e; }
+.planner-actions .selected-view { background: #e7f4df; color: #26543b; box-shadow: inset 0 0 0 1px #bcd5bf; }
+.schedule-list-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding-top: .25rem; }
+.schedule-list-heading h3 { margin: 0; font-size: 1rem; }
+.schedule-list-heading span { color: #78847d; font-size: .75rem; font-weight: 700; }
+.member-schedule-filter { display: flex; align-items: center; gap: .65rem; }
+.member-schedule-filter button { min-height: 42px; padding: .65rem .9rem; border: 1px solid #d4ddd6; border-radius: 10px; background: #f4f8f3; color: #294638; font-weight: 750; cursor: pointer; }
 .roster-table, .request-list { display: grid; gap: .65rem; }
 .roster-row, .request-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem; border: 1px solid #e5e8e3; border-radius: 12px; }
 .roster-row > div:first-child, .request-row > div:first-child { display: grid; gap: .2rem; }
@@ -112,6 +118,7 @@
   .welcome-panel, .member-hero { min-height: 175px; }
   .full-panel { min-height: 0; margin-top: 18px; }
   .planner-actions > input, .planner-actions > select { flex: 1 1 180px; }
+  .member-schedule-filter { width: 100%; flex-wrap: wrap; }
   .request-row > div:last-child { display: flex; flex-wrap: wrap; gap: .5rem; }
   .invitation-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; }
   .invitation-row .status-pill { justify-self: start; }
@@ -150,6 +157,8 @@
   .roster-row, .request-row { padding: .85rem; }
   .roster-row select { min-width: 0; }
   .attendance-actions button { flex: 1; }
+  .member-schedule-filter { display: grid; grid-template-columns: 1fr; }
+  .member-schedule-filter button { width: 100%; }
   .invitation-bulk-bar { align-items: stretch; flex-direction: column; }
   .invitation-bulk-bar > span { flex: none; }
   .invitation-bulk-bar .bulk-delete-button { width: 100%; }

@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { parseDateOnly } = require("../src/utils/date");
 const { chooseCandidate } = require("../src/services/schedulingPolicy");
+const { rosterDateFilter } = require("../src/controllers/rosterController");
 
 test("date-only parser rejects ambiguous input", () => {
   assert.equal(parseDateOnly("08/13/2026"), null);
@@ -25,4 +26,10 @@ test("scheduler warns when a consecutive assignment is unavoidable", () => {
 test("scheduler prefers a member who has never performed the duty", () => {
   const result = chooseCandidate({ duty: { id: "duty" }, members: [{ id: "a" }, { id: "b" }], assignedToday: new Set(), assignedPreviousDate: new Set(), history: new Map([["duty:a", new Date("2026-01-01")]]) });
   assert.equal(result.member.id, "b");
+});
+
+test("upcoming roster queries include today and future service dates", () => {
+  const date = new Date("2026-08-15T00:00:00.000Z");
+  assert.deepEqual(rosterDateFilter("upcoming", date), { gte: date });
+  assert.equal(rosterDateFilter("date", date), date);
 });

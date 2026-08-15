@@ -9,6 +9,8 @@ const rosterInclude = {
   member: { include: { user: { select: { id: true, name: true, email: true } } } },
 };
 
+const rosterDateFilter = (scope, date) => scope === "upcoming" ? { gte: date } : date;
+
 const generateRoster = async (req, res) => {
   const date = parseDateOnly(req.body.serviceDate);
   if (!date) return res.status(400).json({ message: "serviceDate must use YYYY-MM-DD" });
@@ -23,18 +25,25 @@ const generateRoster = async (req, res) => {
 };
 
 const getRosterByDate = async (req, res) => {
-  const date = parseDateOnly(req.query.date);
-  if (!date) return res.status(400).json({ message: "date query parameter must use YYYY-MM-DD" });
+  const scope = req.query.scope === "upcoming" ? "upcoming" : "date";
+  const dateValue = scope === "upcoming" ? req.query.from : req.query.date;
+  const date = parseDateOnly(dateValue);
+  if (!date) return res.status(400).json({ message: `${scope === "upcoming" ? "from" : "date"} query parameter must use YYYY-MM-DD` });
   try {
-    const where = { churchId: req.user.churchId, serviceDate: date };
+    const where = { churchId: req.user.churchId, serviceDate: rosterDateFilter(scope, date) };
     if (req.user.role !== "admin") {
       const member = await prisma.member.findFirst({ where: { userId: req.user.userId, churchId: req.user.churchId } });
       if (!member) return res.status(404).json({ message: "Member profile not found" });
       where.memberId = member.id;
       where.status = "published";
     }
-    const rosterEntries = await prisma.roster.findMany({ where, include: rosterInclude, orderBy: { dutyId: "asc" } });
-    return res.json({ rosterEntries });
+    const rosterEntries = await prisma.roster.findMany({
+      where,
+      include: rosterInclude,
+      orderBy: scope === "upcoming" ? [{ serviceDate: "asc" }, { dutyId: "asc" }] : { dutyId: "asc" },
+      ...(scope === "upcoming" ? { take: 50 } : {}),
+    });
+    return res.json({ rosterEntries, scope });
   } catch (error) {
     console.error("Error fetching roster", error);
     return res.status(500).json({ message: "Failed to fetch roster" });
@@ -104,4 +113,4 @@ const publishRoster = async (req, res) => {
   }
 };
 
-module.exports = { generateRoster, getRosterByDate, reassignRoster, markAttendance, publishRoster };
+module.exports = { generateRoster, getRosterByDate, reassignRoster, markAttendance, publishRoster, rosterDateFilter };

@@ -93,4 +93,38 @@ const notifyPasswordReset = async (req, res) => {
   return res.json({ message: "Password reset notification processed", result });
 };
 
-module.exports = { notifyRosterPublished, notifyInvitation, notifySwitchRequest, notifyPasswordReset, sendLoggedEmail };
+const notifyTaskReminders = async (req, res) => {
+  const { reminderHours, taskUrl, assignments } = req.body;
+  if (![4, 24].includes(reminderHours) || !Array.isArray(assignments)) {
+    return res.status(400).json({ message: "A 4-hour or 24-hour reminder and assignments are required" });
+  }
+  const results = [];
+  for (const assignment of assignments) {
+    const { churchId, rosterId, dutyName, subunitName, memberName, memberEmail, serviceStartsAt, timezone } = assignment;
+    if (!churchId || !rosterId || !memberEmail || !serviceStartsAt) {
+      results.push({ rosterId, status: "failed", error: "Invalid reminder payload" });
+      continue;
+    }
+    const action = taskUrl ? `<p><a href="${escapeHtml(taskUrl)}">Open Rosterly and acknowledge this task</a></p>` : "";
+    let formattedStart;
+    try {
+      formattedStart = new Intl.DateTimeFormat("en-NG", { timeZone: timezone || "UTC", dateStyle: "full", timeStyle: "short" }).format(new Date(serviceStartsAt));
+    } catch {
+      formattedStart = new Date(serviceStartsAt).toUTCString();
+    }
+    const result = await sendLoggedEmail({
+      churchId,
+      rosterId,
+      recipient: memberEmail,
+      eventType: `task-reminder-${reminderHours}h`,
+      idempotencyKey: `${rosterId}:reminder:${reminderHours}:email`,
+      subject: `${reminderHours === 24 ? "Tomorrow" : "Starting soon"}: ${dutyName}`,
+      html: `<p>Hi ${escapeHtml(memberName)},</p><p>This is your ${reminderHours}-hour reminder for <strong>${escapeHtml(dutyName)}</strong> (${escapeHtml(subunitName)}) at <strong>${escapeHtml(formattedStart)}</strong>.</p>${action}`,
+    });
+    results.push({ rosterId, memberEmail, ...result });
+  }
+  const summary = summarizeResults(results);
+  return res.json({ message: `Processed ${assignments.length} task reminders`, summary, results });
+};
+
+module.exports = { notifyRosterPublished, notifyInvitation, notifySwitchRequest, notifyPasswordReset, notifyTaskReminders, sendLoggedEmail };

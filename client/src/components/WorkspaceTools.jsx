@@ -167,10 +167,19 @@ export function UnitManagement({ token, subunits, members, onChanged }) {
 export function RosterPlanner({ token, members }) {
   const toast = useToast();
   const [date, setDate] = useState(today());
+  const [manualTime, setManualTime] = useState("09:00");
   const [viewMode, setViewMode] = useState("upcoming");
   const [entries, setEntries] = useState([]);
   const [generationResults, setGenerationResults] = useState([]);
   const [busy, setBusy] = useState(false);
+  const [schedules, setSchedules] = useState([]);
+  const [scheduleDraft, setScheduleDraft] = useState({ name: "", weekday: "0", startTime: "09:00", timezone: "Africa/Lagos", horizonDays: 35, autoPublish: true });
+  const [scheduleBusy, setScheduleBusy] = useState(false);
+
+  const loadSchedules = useCallback(() => request("/recurring-schedules", token)
+    .then((data) => setSchedules(data.schedules || []))
+    .catch((error) => toast.error(error.message)), [token, toast]);
+  useEffect(() => { loadSchedules(); }, [loadSchedules]);
 
   const load = useCallback(async (mode = viewMode) => {
     const query = mode === "upcoming" ? `/rosters?scope=upcoming&from=${today()}` : `/rosters?date=${date}`;
@@ -187,7 +196,7 @@ export function RosterPlanner({ token, members }) {
   const act = async (action) => {
     setBusy(true);
     try {
-      const data = await request(`/rosters/${action}`, token, { method: "POST", body: JSON.stringify({ serviceDate: date }) });
+      const data = await request(`/rosters/${action}`, token, { method: "POST", body: JSON.stringify({ serviceDate: date, serviceTime: manualTime, timezone: "Africa/Lagos" }) });
       if (action === "generate") setGenerationResults(data.results || []);
       if (action === "publish") {
         const notification = data.notification;
@@ -221,13 +230,52 @@ export function RosterPlanner({ token, members }) {
     catch (error) { toast.error(error.message); }
   };
 
+  const createRecurringSchedule = async (event) => {
+    event.preventDefault();
+    if (scheduleBusy) return;
+    setScheduleBusy(true);
+    try {
+      const data = await request("/recurring-schedules", token, { method: "POST", body: JSON.stringify({ ...scheduleDraft, weekday: Number(scheduleDraft.weekday), horizonDays: Number(scheduleDraft.horizonDays) }) });
+      toast.success(`${data.message}. ${data.generation.generatedAssignments} assignments created.`);
+      setScheduleDraft((current) => ({ ...current, name: "" }));
+      await Promise.all([loadSchedules(), load("upcoming")]);
+      setViewMode("upcoming");
+    } catch (error) { toast.error(error.message); }
+    finally { setScheduleBusy(false); }
+  };
+
+  const updateRecurringSchedule = async (schedule, changes) => {
+    try {
+      const data = await request(`/recurring-schedules/${schedule.id}`, token, { method: "PUT", body: JSON.stringify({ ...schedule, ...changes }) });
+      toast.success(data.message); await loadSchedules(); await load("upcoming");
+    } catch (error) { toast.error(error.message); }
+  };
+
+  const deleteRecurringSchedule = async (schedule) => {
+    if (!window.confirm(`Delete ${schedule.name}? Existing generated tasks will be kept.`)) return;
+    try { const data = await request(`/recurring-schedules/${schedule.id}`, token, { method: "DELETE" }); toast.success(data.message); await loadSchedules(); }
+    catch (error) { toast.error(error.message); }
+  };
+
   return <section className="panel full-panel workspace-tool"><div className="view-heading"><div><p className="eyebrow">TASK PLANNING</p><h2>Generate, review and publish</h2><p>Assignments remain drafts until you explicitly publish them.</p></div></div>
-    <div className="planner-actions"><input type="date" value={date} onChange={(event) => { setDate(event.target.value); setViewMode("date"); }} /><button type="button" className={viewMode === "upcoming" ? "selected-view" : ""} onClick={() => setViewMode("upcoming")}>Upcoming tasks</button><button onClick={() => act("generate")} disabled={busy}>Generate draft</button><button className="publish-button" onClick={() => act("publish")} disabled={busy || viewMode !== "date" || !entries.length}>Publish roster</button></div>
+    <section className="recurring-schedule-panel">
+      <div><p className="eyebrow">AUTOMATION</p><h3>Recurring service times</h3><p>Rosterly keeps at least one month scheduled ahead and sends reminders automatically.</p></div>
+      <form className="recurring-schedule-form" onSubmit={createRecurringSchedule}>
+        <input value={scheduleDraft.name} onChange={(event) => setScheduleDraft((current) => ({ ...current, name: event.target.value }))} placeholder="e.g. Sunday Service" required />
+        <select value={scheduleDraft.weekday} onChange={(event) => setScheduleDraft((current) => ({ ...current, weekday: event.target.value }))}><option value="0">Sunday</option><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option></select>
+        <input type="time" value={scheduleDraft.startTime} onChange={(event) => setScheduleDraft((current) => ({ ...current, startTime: event.target.value }))} required />
+        <input value={scheduleDraft.timezone} onChange={(event) => setScheduleDraft((current) => ({ ...current, timezone: event.target.value }))} aria-label="Timezone" required />
+        <label className="automation-checkbox"><input type="checkbox" checked={scheduleDraft.autoPublish} onChange={(event) => setScheduleDraft((current) => ({ ...current, autoPublish: event.target.checked }))} /> Auto-publish</label>
+        <button disabled={scheduleBusy}>{scheduleBusy ? "Creating…" : "Add recurring time"}</button>
+      </form>
+      <div className="recurring-schedule-list">{schedules.map((schedule) => <article key={schedule.id} className="recurring-schedule-card"><div><strong>{schedule.name}</strong><small>{["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][schedule.weekday]} at {schedule.startTime} · {schedule.timezone}</small></div><span className={`status-pill ${schedule.isActive ? "" : "inactive"}`}>{schedule.isActive ? "active" : "paused"}</span><div><button type="button" onClick={() => updateRecurringSchedule(schedule, { isActive: !schedule.isActive })}>{schedule.isActive ? "Pause" : "Resume"}</button><button type="button" className="schedule-delete" onClick={() => deleteRecurringSchedule(schedule)}>Delete</button></div></article>)}{!schedules.length && <p className="compact-empty">No recurring service times configured yet.</p>}</div>
+    </section>
+    <div className="planner-actions"><input type="date" value={date} onChange={(event) => { setDate(event.target.value); setViewMode("date"); }} /><input type="time" value={manualTime} onChange={(event) => setManualTime(event.target.value)} aria-label="Service start time" /><button type="button" className={viewMode === "upcoming" ? "selected-view" : ""} onClick={() => setViewMode("upcoming")}>Upcoming tasks</button><button onClick={() => act("generate")} disabled={busy}>Generate draft</button><button className="publish-button" onClick={() => act("publish")} disabled={busy || viewMode !== "date" || !entries.length}>Publish roster</button></div>
     {generationResults.filter((result) => result.status !== "assigned" || result.fairnessWarning).map((result) => <p className="tool-warning" key={result.duty.id}>{result.duty.name}: {result.reason || result.fairnessWarning}</p>)}
     <div className="schedule-list-heading"><h3>{viewMode === "upcoming" ? "Upcoming task log" : `Tasks for ${displayServiceDate(`${date}T00:00:00.000Z`)}`}</h3><span>{entries.length} {entries.length === 1 ? "assignment" : "assignments"}</span></div>
     <div className="roster-table">{entries.map((entry) => {
       const eligible = members.filter((member) => member.subunitId === entry.duty.subunitId && member.isActive !== false);
-      return <div className="roster-row" key={entry.id}><div><strong>{entry.duty.name}</strong><small>{viewMode === "upcoming" ? `${displayServiceDate(entry.serviceDate)} · ` : ""}{entry.duty.subunit.name} · {entry.status}</small></div>
+      return <div className="roster-row" key={entry.id}><div><strong>{entry.duty.name}</strong><small>{viewMode === "upcoming" ? `${displayServiceDate(entry.serviceDate)} · ` : ""}{entry.duty.subunit.name} · {entry.status}{entry.acknowledgedAt ? " · acknowledged" : ""}</small></div>
         <select value={entry.memberId} disabled={entry.status === "published"} onChange={(event) => reassign(entry.id, event.target.value)}>{eligible.map((member) => <option value={member.id} key={member.id}>{member.user?.name}</option>)}</select>
         {entry.status === "published" && <div className="attendance-actions"><button className={entry.attended === true ? "selected" : ""} onClick={() => attendance(entry.id, true)}>Present</button><button className={entry.attended === false ? "selected danger" : ""} onClick={() => attendance(entry.id, false)}>Absent</button></div>}
       </div>;
@@ -244,7 +292,11 @@ export function MemberAssignments({ token }) {
     const query = viewMode === "upcoming" ? `/rosters?scope=upcoming&from=${today()}` : `/rosters?date=${date}`;
     request(query, token).then((data) => setEntries(data.rosterEntries || [])).catch((error) => toast.error(error.message));
   }, [date, token, toast, viewMode]);
-  return <section className="panel full-panel workspace-tool"><div className="view-heading"><div><p className="eyebrow">MY SCHEDULE</p><h2>{viewMode === "upcoming" ? "Upcoming assignments" : "Published assignments"}</h2><p>{viewMode === "upcoming" ? "Your published tasks from today onward." : "Viewing your published assignment for a specific service date."}</p></div><div className="member-schedule-filter"><input type="date" value={date} onChange={(event) => { setDate(event.target.value); setViewMode("date"); }} /><button type="button" onClick={() => setViewMode("upcoming")}>Upcoming tasks</button></div></div><div className="roster-table">{entries.map((entry) => <div className="roster-row" key={entry.id}><div><strong>{entry.duty.name}</strong><small>{viewMode === "upcoming" ? `${displayServiceDate(entry.serviceDate)} · ` : ""}{entry.duty.subunit.name}</small></div><span className="status-pill">Published</span></div>)}{!entries.length && <p className="compact-empty">{viewMode === "upcoming" ? "You have no upcoming published assignments." : "No published assignment for this date."}</p>}</div></section>;
+  const acknowledge = async (id) => {
+    try { const data = await request(`/rosters/${id}/acknowledge`, token, { method: "POST" }); setEntries((current) => current.map((entry) => entry.id === id ? { ...entry, acknowledgedAt: data.rosterEntry.acknowledgedAt } : entry)); toast.success(data.message); }
+    catch (error) { toast.error(error.message); }
+  };
+  return <section className="panel full-panel workspace-tool"><div className="view-heading"><div><p className="eyebrow">MY SCHEDULE</p><h2>{viewMode === "upcoming" ? "Upcoming assignments" : "Published assignments"}</h2><p>{viewMode === "upcoming" ? "Your published tasks from today onward." : "Viewing your published assignment for a specific service date."}</p></div><div className="member-schedule-filter"><input type="date" value={date} onChange={(event) => { setDate(event.target.value); setViewMode("date"); }} /><button type="button" onClick={() => setViewMode("upcoming")}>Upcoming tasks</button></div></div><div className="roster-table">{entries.map((entry) => <div className="roster-row" key={entry.id}><div><strong>{entry.duty.name}</strong><small>{viewMode === "upcoming" ? `${displayServiceDate(entry.serviceDate)} · ` : ""}{entry.duty.subunit.name}</small></div>{entry.acknowledgedAt ? <span className="status-pill">Acknowledged</span> : <button className="acknowledge-button" onClick={() => acknowledge(entry.id)}>Acknowledge task</button>}</div>)}{!entries.length && <p className="compact-empty">{viewMode === "upcoming" ? "You have no upcoming published assignments." : "No published assignment for this date."}</p>}</div></section>;
 }
 
 export function RequestsView({ token, isAdmin, subunits }) {

@@ -2,7 +2,7 @@ const prisma = require("../config/prismaClient");
 const { parseDateOnly } = require("../utils/date");
 const { chooseCandidate } = require("./schedulingPolicy");
 
-const generateRosterForDate = async (churchId, serviceDate) => {
+const generateRosterForDate = async (churchId, serviceDate, options = {}) => {
   const targetDate = parseDateOnly(serviceDate);
   if (!targetDate) throw new Error("INVALID_SERVICE_DATE");
 
@@ -47,10 +47,26 @@ const generateRosterForDate = async (churchId, serviceDate) => {
     assignedToday.add(member.id);
 
     try {
-      const rosterEntry = await prisma.roster.create({ data: { churchId, dutyId: duty.id, memberId: member.id, serviceDate: targetDate, status: "scheduled" } });
+      const rosterEntry = await prisma.roster.create({ data: {
+        churchId,
+        dutyId: duty.id,
+        memberId: member.id,
+        serviceDate: targetDate,
+        status: "scheduled",
+        recurringScheduleId: options.recurringScheduleId || null,
+        serviceStartsAt: options.serviceStartsAt || null,
+      } });
       results.push({ duty, member, status: "assigned", fairnessWarning, rosterEntry });
     } catch (error) {
-      if (error.code === "P2002") results.push({ duty, member, status: "error", reason: "A roster entry for this duty and date already exists" });
+      if (error.code === "P2002") {
+        if (options.serviceStartsAt) {
+          await prisma.roster.updateMany({
+            where: { churchId, dutyId: duty.id, serviceDate: targetDate, serviceStartsAt: null },
+            data: { serviceStartsAt: options.serviceStartsAt, recurringScheduleId: options.recurringScheduleId || undefined },
+          });
+        }
+        results.push({ duty, member, status: "existing", reason: "A roster entry for this duty and date already exists" });
+      }
       else throw error;
     }
   }

@@ -22,6 +22,7 @@ model Church {
   auditLogs           AuditLog[]
   passwordResetTokens PasswordResetToken[]
   revokedSessions     RevokedSession[]
+  recurringSchedules  RecurringSchedule[]
 
   @@map("churches")
 }
@@ -90,23 +91,49 @@ model Duty {
 }
 
 model Roster {
-  id                 String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  churchId           String            @map("church_id") @db.Uuid
-  dutyId             String            @map("duty_id") @db.Uuid
-  memberId           String            @map("member_id") @db.Uuid
-  serviceDate        DateTime          @map("service_date") @db.Date
-  status             String            @default("scheduled")
-  attended           Boolean?
-  attendanceMarkedAt DateTime?         @map("attendance_marked_at") @db.Timestamptz(6)
-  attendanceMarkedBy String?           @map("attendance_marked_by") @db.Uuid
-  createdAt          DateTime?         @default(now()) @map("created_at") @db.Timestamptz(6)
-  notificationLogs   NotificationLog[]
-  church             Church            @relation(fields: [churchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  duty               Duty              @relation(fields: [dutyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  member             Member            @relation(fields: [memberId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  id                  String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  churchId            String             @map("church_id") @db.Uuid
+  dutyId              String             @map("duty_id") @db.Uuid
+  memberId            String             @map("member_id") @db.Uuid
+  serviceDate         DateTime           @map("service_date") @db.Date
+  status              String             @default("scheduled")
+  attended            Boolean?
+  attendanceMarkedAt  DateTime?          @map("attendance_marked_at") @db.Timestamptz(6)
+  attendanceMarkedBy  String?            @map("attendance_marked_by") @db.Uuid
+  createdAt           DateTime?          @default(now()) @map("created_at") @db.Timestamptz(6)
+  recurringScheduleId String?            @map("recurring_schedule_id") @db.Uuid
+  serviceStartsAt     DateTime?          @map("service_starts_at") @db.Timestamptz(6)
+  acknowledgedAt      DateTime?          @map("acknowledged_at") @db.Timestamptz(6)
+  notificationLogs    NotificationLog[]
+  church              Church             @relation(fields: [churchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  duty                Duty               @relation(fields: [dutyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  member              Member             @relation(fields: [memberId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  recurringSchedule   RecurringSchedule? @relation(fields: [recurringScheduleId], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
   @@unique([dutyId, serviceDate])
+  @@index([churchId, serviceStartsAt, status])
   @@map("rosters")
+}
+
+model RecurringSchedule {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  churchId        String    @map("church_id") @db.Uuid
+  name            String
+  weekday         Int
+  startTime       String    @map("start_time")
+  timezone        String    @default("Africa/Lagos")
+  horizonDays     Int       @default(35) @map("horizon_days")
+  autoPublish     Boolean   @default(true) @map("auto_publish")
+  isActive        Boolean   @default(true) @map("is_active")
+  lastGeneratedAt DateTime? @map("last_generated_at") @db.Timestamptz(6)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  church          Church    @relation(fields: [churchId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  rosters         Roster[]
+
+  @@unique([churchId, name])
+  @@index([isActive, weekday])
+  @@map("recurring_schedules")
 }
 
 model NotificationLog {

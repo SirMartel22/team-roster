@@ -1,8 +1,9 @@
 const prisma = require("../config/prismaClient");
 const { generateRosterForDate } = require("../services/schedulingService");
 const { recordAudit } = require("../services/auditService");
-const { notify } = require("../services/notificationClient");
+const { notifyPublishedAssignments, taskAssignments } = require("../services/taskNotificationService");
 const { parseDateOnly } = require("../utils/date");
+const { TIME_PATTERN, isValidTimeZone, zonedDateTimeToUtc } = require("../utils/recurrence");
 
 const rosterInclude = {
   duty: { include: { subunit: true } },
@@ -14,8 +15,13 @@ const rosterDateFilter = (scope, date) => scope === "upcoming" ? { gte: date } :
 const generateRoster = async (req, res) => {
   const date = parseDateOnly(req.body.serviceDate);
   if (!date) return res.status(400).json({ message: "serviceDate must use YYYY-MM-DD" });
+  const serviceTime = typeof req.body.serviceTime === "string" ? req.body.serviceTime : "09:00";
+  const timezone = typeof req.body.timezone === "string" ? req.body.timezone : "Africa/Lagos";
+  if (!TIME_PATTERN.test(serviceTime) || !isValidTimeZone(timezone)) return res.status(400).json({ message: "serviceTime and timezone are invalid" });
   try {
-    const results = await generateRosterForDate(req.user.churchId, req.body.serviceDate);
+    const results = await generateRosterForDate(req.user.churchId, req.body.serviceDate, {
+      serviceStartsAt: zonedDateTimeToUtc(req.body.serviceDate, serviceTime, timezone),
+    });
     await recordAudit({ churchId: req.user.churchId, actorUserId: req.user.userId, action: "roster.generated", entityType: "roster", metadata: { serviceDate: req.body.serviceDate } });
     return res.status(201).json({ message: `Roster generation complete for ${req.body.serviceDate}`, results });
   } catch (error) {
@@ -95,12 +101,8 @@ const publishRoster = async (req, res) => {
       await recordAudit({ churchId: req.user.churchId, actorUserId: req.user.userId, action: "roster.published", entityType: "roster", metadata: { serviceDate: req.body.serviceDate } });
     }
 
-    const assignments = rosterEntries.map((entry) => ({ rosterId: entry.id, dutyName: entry.duty.name, subunitName: entry.duty.subunit.name, memberName: entry.member.user.name, memberEmail: entry.member.user.email }));
-    const notification = await notify("/notify/roster-published", {
-      churchId: req.user.churchId,
-      serviceDate: req.body.serviceDate,
-      assignments,
-    });
+    const assignments = taskAssignments(rosterEntries);
+    const notification = await notifyPublishedAssignments(req.user.churchId, req.body.serviceDate, rosterEntries);
     return res.json({
       message: alreadyPublished ? "Roster was already published; task emails were retried" : `Roster for ${req.body.serviceDate} published`,
       alreadyPublished,
@@ -113,4 +115,21 @@ const publishRoster = async (req, res) => {
   }
 };
 
-module.exports = { generateRoster, getRosterByDate, reassignRoster, markAttendance, publishRoster, rosterDateFilter };
+const acknowledgeRoster = async (req, res) => {
+  try {
+    const member = await prisma.member.findFirst({ where: { churchId: req.user.churchId, userId: req.user.userId } });
+    if (!member) return res.status(404).json({ message: "Member profile not found" });
+    const entry = await prisma.roster.findFirst({ where: { id: req.params.id, churchId: req.user.churchId, memberId: member.id, status: "published" } });
+    if (!entry) return res.status(404).json({ message: "Published assignment not found" });
+    const rosterEntry = entry.acknowledgedAt
+      ? entry
+      : await prisma.roster.update({ where: { id: entry.id }, data: { acknowledgedAt: new Date() }, include: rosterInclude });
+    if (!entry.acknowledgedAt) await recordAudit({ churchId: req.user.churchId, actorUserId: req.user.userId, action: "roster.acknowledged", entityType: "roster", entityId: entry.id });
+    return res.json({ message: "Assignment acknowledged", rosterEntry });
+  } catch (error) {
+    console.error("Failed to acknowledge assignment", error);
+    return res.status(500).json({ message: "Failed to acknowledge assignment" });
+  }
+};
+
+module.exports = { acknowledgeRoster, generateRoster, getRosterByDate, reassignRoster, markAttendance, publishRoster, rosterDateFilter };

@@ -26,3 +26,6 @@ Run `npm run verify` from the repository root. This executes backend unit tests,
 6. Complete the two-tenant acceptance journey documented in `BHBC_Media_Roster_Implementation_Plan.md`.
 
 Do not deploy the application code before applying the slug/schema migration: the new authentication and feature routes depend on those columns and tables.
+
+
+I recommend implementing this in phases: recurring schedules → month-ahead generation → email reminders → acknowledgements → push → WhatsApp → SMS.

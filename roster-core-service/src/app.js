@@ -7,6 +7,7 @@ const dutyRoutes = require('./routes/dutyRoutes')
 const requireAuth = require('./middleware/authMiddleware')
 const invitationRoutes = require('./routes/invitationRoutes');
 const switchRequestRoutes = require('./routes/switchRequestRoutes');
+const recurringScheduleRoutes = require('./routes/recurringScheduleRoutes');
 
 
 const app = express();
@@ -30,5 +31,6 @@ app.use('/', dutyRoutes)
 app.use('/', rosterRoutes)
 app.use('/', invitationRoutes)
 app.use('/', switchRequestRoutes)
+app.use('/', recurringScheduleRoutes)
 
 module.exports = app;

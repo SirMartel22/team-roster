@@ -46,6 +46,22 @@
 .schedule-list-heading span { color: #78847d; font-size: .75rem; font-weight: 700; }
 .member-schedule-filter { display: flex; align-items: center; gap: .65rem; }
 .member-schedule-filter button { min-height: 42px; padding: .65rem .9rem; border: 1px solid #d4ddd6; border-radius: 10px; background: #f4f8f3; color: #294638; font-weight: 750; cursor: pointer; }
+.recurring-schedule-panel { display: grid; gap: 1rem; padding: 1.1rem; border: 1px solid #dce4dc; border-radius: 14px; background: #f7faf5; }
+.recurring-schedule-panel h3 { margin: .1rem 0 .25rem; }
+.recurring-schedule-panel p { margin: 0; color: #6f7b73; font-size: .78rem; }
+.recurring-schedule-form { display: grid; grid-template-columns: minmax(180px, 1.4fr) minmax(120px, .8fr) minmax(110px, .65fr) minmax(150px, 1fr) auto auto; gap: .6rem; align-items: center; }
+.recurring-schedule-form button { min-height: 42px; padding: .65rem .85rem; border: 0; border-radius: 10px; background: #183e2f; color: #fff; font-weight: 750; cursor: pointer; }
+.automation-checkbox { min-height: 42px; display: flex; align-items: center; gap: .45rem; color: #365046; font-size: .76rem; font-weight: 700; white-space: nowrap; }
+.workspace-tool .automation-checkbox input { width: 17px; height: 17px; min-height: 0; padding: 0; accent-color: #1c5b40; }
+.recurring-schedule-list { display: grid; gap: .55rem; }
+.recurring-schedule-card { min-height: 58px; padding: .7rem .8rem; display: grid; grid-template-columns: minmax(180px, 1fr) auto auto; gap: .75rem; align-items: center; border: 1px solid #e0e7df; border-radius: 10px; background: #fff; }
+.recurring-schedule-card > div:first-child { display: grid; gap: .2rem; }
+.recurring-schedule-card small { color: #748078; }
+.recurring-schedule-card > div:last-child { display: flex; gap: .4rem; }
+.recurring-schedule-card button, .acknowledge-button { min-height: 34px; padding: .45rem .65rem; border: 1px solid #cfd9d1; border-radius: 8px; background: #fff; color: #2d5742; font-weight: 750; cursor: pointer; }
+.recurring-schedule-card .schedule-delete { border-color: #ecd0ca; color: #9a4135; }
+.status-pill.inactive { background: #f0f1ef; color: #777e79; }
+.acknowledge-button { background: #183e2f; color: #fff; }
 .roster-table, .request-list { display: grid; gap: .65rem; }
 .roster-row, .request-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem; border: 1px solid #e5e8e3; border-radius: 12px; }
 .roster-row > div:first-child, .request-row > div:first-child { display: grid; gap: .2rem; }
@@ -174,4 +190,18 @@
 
 @media (max-height: 680px) {
   .help-card { display: none; }
+}
+
+@media (max-width: 1200px) {
+  .recurring-schedule-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 760px) {
+  .recurring-schedule-card { grid-template-columns: minmax(0, 1fr) auto; }
+  .recurring-schedule-card > div:last-child { grid-column: 1 / -1; }
+}
+
+@media (max-width: 520px) {
+  .recurring-schedule-form, .recurring-schedule-card { grid-template-columns: 1fr; }
+  .recurring-schedule-card > div:last-child { grid-column: auto; }
 }

@@ -5,7 +5,7 @@ dotenv.config();
 const prisma = require("../config/prismaClient");
 const { runAutomationCycle } = require("../services/automationService");
 
-runAutomationCycle()
+runAutomationCycle({ throwOnError: true })
   .then(() => console.log("Schedule automation cycle completed"))
   .catch((error) => { console.error("Schedule automation cycle failed", error); process.exitCode = 1; })
   .finally(() => prisma.$disconnect());

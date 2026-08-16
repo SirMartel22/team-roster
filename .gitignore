@@ -1,10 +1,9 @@
 node_modules/
 
-.env
-.env.local
 
 .vscode
 
 # docs
 UPDATE_NOTES.md
 BHBC_Media_Roster_Project_Status.md
+config.bat

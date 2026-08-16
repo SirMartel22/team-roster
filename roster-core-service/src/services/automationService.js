@@ -108,14 +108,17 @@ const sendDueReminders = async (now = new Date()) => {
 };
 
 let automationRunning = false;
-const runAutomationCycle = async () => {
+const runAutomationCycle = async ({ throwOnError = false } = {}) => {
   if (automationRunning) return;
   automationRunning = true;
   try {
-    await generateAllScheduleWindows();
+    const generationResults = await generateAllScheduleWindows();
     await sendDueReminders();
+    const failedSchedules = generationResults.filter(({ error }) => error);
+    if (failedSchedules.length) throw new Error(`${failedSchedules.length} recurring schedule generation job(s) failed`);
   } catch (error) {
     console.error("Schedule automation cycle failed", { message: error.message });
+    if (throwOnError) throw error;
   } finally {
     automationRunning = false;
   }

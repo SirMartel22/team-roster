@@ -1,6 +1,7 @@
 import { useState, useContext } from 'react';
 import { AuthContext } from '../context/authContext';
 import { useToast } from '../context/toastContext';
+import { PasswordInput } from './PasswordInput';
 
 export const LoginForm = ({ onForgotPassword }) => {
   const { login, isLoading } = useContext(AuthContext);
@@ -61,13 +62,13 @@ export const LoginForm = ({ onForgotPassword }) => {
 
       <div className="auth-input-group">
         <label htmlFor="password">Password</label>
-        <input
+        <PasswordInput
           id="password"
-          type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           disabled={isLoading}
           className="auth-input"
+          autoComplete="current-password"
         />
       </div>
 

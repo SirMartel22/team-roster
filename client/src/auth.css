@@ -22,6 +22,13 @@
 .auth-input { width: 100%; min-width: 0; height: 48px; padding: 0 14px; border-radius: 11px; border: 1px solid #dce2dd; background: #fafbf9; color: var(--ink); outline: none; transition: border-color .2s, box-shadow .2s; }
 .auth-input:focus { border-color: #599070; box-shadow: 0 0 0 4px rgba(50,112,75,.1); background: white; }
 .auth-input:disabled { color: #9aa29d; cursor: not-allowed; }
+.auth-password-field { position: relative; min-width: 0; }
+.auth-password-field .auth-input { padding-right: 48px; }
+.auth-password-toggle { width: 42px; height: 42px; padding: 0; position: absolute; right: 3px; top: 3px; display: grid; place-items: center; border-radius: 9px; background: transparent; color: #68756d; cursor: pointer; }
+.auth-password-toggle:hover:not(:disabled) { background: #eef3ee; color: var(--green); }
+.auth-password-toggle:focus-visible { outline: 2px solid #599070; outline-offset: -2px; }
+.auth-password-toggle:disabled { color: #aab1ad; cursor: not-allowed; }
+.auth-password-toggle svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .auth-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .auth-actions-row { display: flex; justify-content: space-between; margin: 1px 0 20px; color: var(--muted); font-size: 13px; }
 .link-button { padding: 0; background: transparent; color: var(--green); font-weight: 700; cursor: pointer; }

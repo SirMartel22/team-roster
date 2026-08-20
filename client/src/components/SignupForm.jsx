@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useToast } from "../context/toastContext";
+import { PasswordInput } from "./PasswordInput";
 
 export function SignupForm({ onSignupComplete, invitationToken }) {
   const [fields, setFields] = useState({ churchId: "", subunitId: "", name: "", email: "", password: "", phone: "", whatsapp: "" });
@@ -77,7 +78,7 @@ export function SignupForm({ onSignupComplete, invitationToken }) {
         <div className="auth-input-group"><label htmlFor="subunitId">Work unit</label><select className="auth-input" id="subunitId" name="subunitId" value={fields.subunitId} onChange={update} disabled={!fields.churchId} required><option value="">Select a unit</option>{subunits.map((subunit) => <option key={subunit.id} value={subunit.id}>{subunit.name}</option>)}</select></div>
       </div>
       <div className="auth-input-group"><label htmlFor="memberName">Full name</label><input className="auth-input" id="memberName" name="name" value={fields.name} onChange={update} autoComplete="name" required /></div>
-      <div className="auth-form-row"><div className="auth-input-group"><label htmlFor="memberEmail">Email</label><input className="auth-input" id="memberEmail" name="email" type="email" value={fields.email} onChange={update} readOnly={Boolean(invitationToken)} autoComplete="email" required /></div><div className="auth-input-group"><label htmlFor="memberPassword">Password</label><input className="auth-input" id="memberPassword" name="password" type="password" value={fields.password} onChange={update} autoComplete="new-password" required /></div></div>
+      <div className="auth-form-row"><div className="auth-input-group"><label htmlFor="memberEmail">Email</label><input className="auth-input" id="memberEmail" name="email" type="email" value={fields.email} onChange={update} readOnly={Boolean(invitationToken)} autoComplete="email" required /></div><div className="auth-input-group"><label htmlFor="memberPassword">Password</label><PasswordInput id="memberPassword" name="password" value={fields.password} onChange={update} autoComplete="new-password" required /></div></div>
       <fieldset className="contact-fields"><legend>Required contact details</legend><p>Use numbers that can receive calls and WhatsApp messages, including the country code.</p><div className="auth-form-row"><div className="auth-input-group"><label htmlFor="phone">Phone number</label><input className="auth-input" id="phone" name="phone" type="tel" inputMode="tel" value={fields.phone} onChange={update} autoComplete="tel" placeholder="e.g. +234 801 234 5678" minLength="7" required /></div><div className="auth-input-group"><label htmlFor="whatsapp">WhatsApp number</label><input className="auth-input" id="whatsapp" name="whatsapp" type="tel" inputMode="tel" value={fields.whatsapp} onChange={update} autoComplete="tel" placeholder="e.g. +234 801 234 5678" minLength="7" required /></div></div></fieldset>
       <button className="auth-button" disabled={isSubmitting}>{isSubmitting ? "Creating account..." : "Join team"}</button>
     </form>

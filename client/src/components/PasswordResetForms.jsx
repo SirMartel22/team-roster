@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useToast } from "../context/toastContext";
+import { PasswordInput } from "./PasswordInput";
 
 const authServiceUrl = import.meta.env.VITE_AUTH_SERVICE_URL;
 
@@ -75,8 +76,8 @@ export function ResetPasswordForm({ token, onComplete }) {
 
   return <form className="auth-form" onSubmit={submit}>
     <div className="auth-form-header"><p className="eyebrow">Secure your account</p><h1>Choose a new password</h1><p className="auth-subtitle">Use at least eight characters. This reset link can be used only once.</p></div>
-    <div className="auth-input-group"><label htmlFor="newPassword">New password</label><input className="auth-input" id="newPassword" type="password" value={password} onChange={(event) => setPassword(event.target.value)} minLength="8" autoComplete="new-password" required disabled={isSubmitting} /></div>
-    <div className="auth-input-group"><label htmlFor="confirmPassword">Confirm new password</label><input className="auth-input" id="confirmPassword" type="password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} minLength="8" autoComplete="new-password" required disabled={isSubmitting} /></div>
+    <div className="auth-input-group"><label htmlFor="newPassword">New password</label><PasswordInput id="newPassword" value={password} onChange={(event) => setPassword(event.target.value)} minLength="8" autoComplete="new-password" required disabled={isSubmitting} /></div>
+    <div className="auth-input-group"><label htmlFor="confirmPassword">Confirm new password</label><PasswordInput id="confirmPassword" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} minLength="8" autoComplete="new-password" required disabled={isSubmitting} /></div>
     <button className="auth-button" disabled={isSubmitting}>{isSubmitting ? "Updating password..." : "Update password"}</button>
   </form>;
 }

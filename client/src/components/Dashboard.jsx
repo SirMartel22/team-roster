@@ -61,6 +61,10 @@ export function Dashboard() {
     setMembers((current) => current.map((member) => member.id === changedMember.id ? changedMember : member));
   }, []);
 
+  const handleMemberRemoved = useCallback((memberId) => {
+    setMembers((current) => current.filter((member) => member.id !== memberId));
+  }, []);
+
   const changeView = (view) => { setActiveView(view); setMobileNavOpen(false); };
   const openPlanner = () => {
     changeView("Schedule");
@@ -104,7 +108,7 @@ export function Dashboard() {
         </header>
 
         {loading ? <DashboardSkeleton /> : isAdmin ? (
-          <AdminContent view={activeView} members={members} activeMembers={activeMembers} subunits={subunits} onNavigate={changeView} token={token} onChanged={handleSubunitChanged} onMemberChanged={handleMemberChanged} />
+          <AdminContent view={activeView} members={members} activeMembers={activeMembers} subunits={subunits} onNavigate={changeView} token={token} onChanged={handleSubunitChanged} onMemberChanged={handleMemberChanged} onMemberRemoved={handleMemberRemoved} />
         ) : (
           <MemberContent view={activeView} members={members} user={user} mySubunit={mySubunit} myMember={myMember} subunits={subunits} token={token} />
         )}
@@ -113,8 +117,8 @@ export function Dashboard() {
   );
 }
 
-function AdminContent({ view, members, activeMembers, subunits, onNavigate, token, onChanged, onMemberChanged }) {
-  if (view === "Members") return <PeopleView members={members} title="All members" subtitle="Everyone working across your organisation's units." token={token} isAdmin onMemberChanged={onMemberChanged} />;
+function AdminContent({ view, members, activeMembers, subunits, onNavigate, token, onChanged, onMemberChanged, onMemberRemoved }) {
+  if (view === "Members") return <PeopleView members={members} title="All members" subtitle="Everyone working across your organisation's units." token={token} isAdmin onMemberChanged={onMemberChanged} onMemberRemoved={onMemberRemoved} />;
   if (view === "Units") return <UnitManagement token={token} subunits={subunits} members={members} onChanged={onChanged} />;
   if (view === "Schedule") return <RosterPlanner token={token} members={members} />;
   if (view === "Requests") return <RequestsView token={token} isAdmin subunits={subunits} />;
@@ -149,8 +153,11 @@ function Stat({ label, value, note, icon }) { return <article className="stat-ca
 function PanelHeader({ title, action, onAction }) { return <div className="panel-header"><h3>{title}</h3>{action && <button onClick={onAction}>{action} <span>→</span></button>}</div>; }
 function PersonRow({ member }) { return <div className="person-row"><span className="member-avatar">{initials(member.user?.name)}</span><div><strong>{member.user?.name || "Unnamed member"}</strong><small>{member.subunit?.name || "No unit"}</small></div><i className={member.isActive === false ? "inactive" : ""}>{member.isActive === false ? "Inactive" : "Active"}</i></div>; }
 function EmptyState({ copy }) { return <div className="compact-empty">{copy}</div>; }
-function PeopleView({ members, title, subtitle, token, isAdmin = false, onMemberChanged }) {
+function PeopleView({ members, title, subtitle, token, isAdmin = false, onMemberChanged, onMemberRemoved }) {
   const toast = useToast();
+  const [deletingMember, setDeletingMember] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const toggleStatus = async (member) => {
     try {
       const response = await fetch(`${import.meta.env.VITE_ROSTER_SERVICE_URL}/members/${member.id}`, { method: "PUT", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ isActive: member.isActive === false }) });
@@ -160,7 +167,40 @@ function PeopleView({ members, title, subtitle, token, isAdmin = false, onMember
       toast.success(`${member.user?.name || "Member"} is now ${data.member.isActive === false ? "inactive" : "active"}.`);
     } catch (error) { toast.error(error.message); }
   };
-  return <section className="panel full-panel"><div className="view-heading"><div><p className="eyebrow">DIRECTORY</p><h2>{title}</h2><p>{subtitle}</p></div><label className="search-box"><span>⌕</span><input placeholder="Search members" aria-label="Search members" /></label></div><div className="member-table"><div className="table-head"><span>Member</span><span>Work unit</span><span>Status</span></div>{members.map((member) => <div className="table-row" key={member.id}><div><span className="member-avatar">{initials(member.user?.name)}</span><strong>{member.user?.name}</strong></div><span>{member.subunit?.name || "Unassigned"}</span>{isAdmin ? <button className={`member-status-button ${member.isActive === false ? "inactive" : ""}`} onClick={() => toggleStatus(member)}>{member.isActive === false ? "Activate" : "Deactivate"}</button> : <i className={member.isActive === false ? "inactive" : ""}>{member.isActive === false ? "Inactive" : "Active"}</i>}</div>)}</div></section>;
+  const closeDeleteDialog = () => {
+    if (isDeleting) return;
+    setDeletingMember(null);
+    setDeleteError("");
+  };
+  const removeMember = async () => {
+    if (!deletingMember || isDeleting) return;
+    setIsDeleting(true);
+    setDeleteError("");
+    try {
+      const response = await fetch(`${import.meta.env.VITE_ROSTER_SERVICE_URL}/members/${deletingMember.id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || "The member could not be removed.");
+      onMemberRemoved?.(deletingMember.id);
+      toast.success(data.message || "Member removed.");
+      setDeletingMember(null);
+    } catch (error) {
+      setDeleteError(error.message);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+  return <>
+    <section className="panel full-panel"><div className="view-heading"><div><p className="eyebrow">DIRECTORY</p><h2>{title}</h2><p>{subtitle}</p></div><label className="search-box"><span>⌕</span><input placeholder="Search members" aria-label="Search members" /></label></div><div className={`member-table ${isAdmin ? "admin-member-table" : ""}`}><div className="table-head"><span>Member</span><span>Work unit</span><span>Status</span>{isAdmin && <span>Actions</span>}</div>{members.map((member) => <div className="table-row" key={member.id}><div><span className="member-avatar">{initials(member.user?.name)}</span><strong>{member.user?.name}</strong></div><span>{member.subunit?.name || "Unassigned"}</span>{isAdmin ? <><button className={`member-status-button ${member.isActive === false ? "inactive" : ""}`} onClick={() => toggleStatus(member)}>{member.isActive === false ? "Activate" : "Deactivate"}</button><button type="button" className="member-remove-button" onClick={() => { setDeletingMember(member); setDeleteError(""); }}>Remove</button></> : <i className={member.isActive === false ? "inactive" : ""}>{member.isActive === false ? "Inactive" : "Active"}</i>}</div>)}</div></section>
+    {deletingMember && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeDeleteDialog(); }}>
+      <div className="rename-modal delete-modal" role="alertdialog" aria-modal="true" aria-labelledby="delete-member-title" aria-describedby="delete-member-description">
+        <div className="delete-warning-icon" aria-hidden="true">!</div>
+        <div className="rename-modal-header"><div><p className="eyebrow">PERMANENT ACTION</p><h2 id="delete-member-title">Remove {deletingMember.user?.name || "this member"}?</h2></div><button type="button" className="modal-close" onClick={closeDeleteDialog} disabled={isDeleting} aria-label="Close remove member dialog">×</button></div>
+        <p className="rename-modal-copy" id="delete-member-description">This permanently deletes the member's account, assignments, attendance history, and unit-switch requests. This cannot be undone.</p>
+        {deleteError && <p className="modal-error" role="alert">{deleteError}</p>}
+        <div className="rename-modal-actions"><button type="button" className="secondary-button" onClick={closeDeleteDialog} disabled={isDeleting}>Keep member</button><button type="button" className="danger-button" onClick={removeMember} disabled={isDeleting}>{isDeleting ? "Removing…" : "Remove permanently"}</button></div>
+      </div>
+    </div>}
+  </>;
 }
 function ProfileView({ user, subunit }) { return <section className="panel full-panel profile-view"><div className="profile-hero"><span className="large-avatar">{initials(user?.name)}</span><div><p className="eyebrow">MY PROFILE</p><h2>{user?.name}</h2><p>{user?.email}</p></div></div><dl><div><dt>Role</dt><dd>Team member</dd></div><div><dt>Work unit</dt><dd>{subunit?.name || "Not assigned"}</dd></div><div><dt>Account status</dt><dd><i>Active</i></dd></div></dl></section>; }
 function DashboardSkeleton() { return <div className="skeleton-grid"><i /><i /><i /><i /><i /></div>; }

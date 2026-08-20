@@ -99,6 +99,39 @@ const updateMember = async (req, res) => {
   }
 };
 
+const deleteMember = async (req, res) => {
+  try {
+    const existing = await prisma.member.findFirst({
+      where: { id: req.params.id, churchId: req.user.churchId },
+      include: { user: { select: { id: true, name: true, email: true } } },
+    });
+    if (!existing) return res.status(404).json({ message: "Member not found" });
+
+    await prisma.$transaction(async (transaction) => {
+      await transaction.notificationLog.deleteMany({ where: { roster: { memberId: existing.id } } });
+      await transaction.roster.deleteMany({ where: { churchId: req.user.churchId, memberId: existing.id } });
+      await transaction.subunitSwitchRequest.deleteMany({ where: { churchId: req.user.churchId, memberId: existing.id } });
+      await transaction.passwordResetToken.deleteMany({ where: { churchId: req.user.churchId, userId: existing.userId } });
+      await transaction.revokedSession.deleteMany({ where: { churchId: req.user.churchId, userId: existing.userId } });
+      await transaction.member.delete({ where: { id: existing.id } });
+      await transaction.user.delete({ where: { id: existing.userId } });
+    });
+
+    await recordAudit({
+      churchId: req.user.churchId,
+      actorUserId: req.user.userId,
+      action: "member.deleted",
+      entityType: "member",
+      entityId: existing.id,
+      metadata: { userId: existing.userId, email: existing.user.email },
+    });
+    return res.json({ message: `${existing.user.name || "Member"} was removed`, memberId: existing.id });
+  } catch (error) {
+    console.error("Failed to remove member", error);
+    return res.status(500).json({ message: "Failed to remove member" });
+  }
+};
+
 const getPerformance = async (req, res) => {
   try {
     const member = await prisma.member.findFirst({ where: { id: req.params.id, churchId: req.user.churchId } });
@@ -123,4 +156,4 @@ const getPerformance = async (req, res) => {
   }
 };
 
-module.exports = { getMembers, createMember, getMemberById, updateMember, getPerformance };
+module.exports = { getMembers, createMember, getMemberById, updateMember, deleteMember, getPerformance };

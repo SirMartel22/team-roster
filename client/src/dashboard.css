@@ -73,6 +73,9 @@
 .break-all { overflow-wrap: anywhere; }
 .member-status-button { justify-self: start; border: 1px solid #b9d7c4; background: #edf7f0; color: #24543a; border-radius: 999px; padding: .4rem .65rem; cursor: pointer; }
 .member-status-button.inactive { border-color: #e4c5bd; background: #fff0ed; color: #8c4137; }
+.admin-member-table .table-head, .admin-member-table .table-row { grid-template-columns: minmax(180px, 1.3fr) minmax(120px, 1fr) auto auto; gap: 12px; }
+.member-remove-button { justify-self: start; border: 1px solid #e2bdb6; border-radius: 9px; padding: .45rem .7rem; background: #fff; color: #963d32; font-size: .72rem; font-weight: 800; cursor: pointer; }
+.member-remove-button:hover { border-color: #c9786c; background: #fff0ed; }
 .modal-backdrop { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 1.25rem; background: rgba(10, 25, 18, .58); backdrop-filter: blur(3px); }
 .rename-modal { width: min(100%, 460px); padding: 1.5rem; border: 1px solid rgba(24, 62, 47, .12); border-radius: 18px; background: #fff; box-shadow: 0 24px 70px rgba(9, 30, 20, .28); }
 .rename-modal-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
@@ -165,6 +168,10 @@
   .table-row strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .table-row > span { grid-column: 1; padding-left: 45px; }
   .table-row .member-status-button { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
+  .admin-member-table .table-row { grid-template-columns: minmax(0, 1fr) auto auto; }
+  .admin-member-table .table-row > span { grid-column: 1; }
+  .admin-member-table .table-row .member-status-button { grid-column: 2; grid-row: 1 / span 2; }
+  .admin-member-table .table-row .member-remove-button { grid-column: 3; grid-row: 1 / span 2; align-self: center; }
   .inline-tool-form, .planner-actions { display: grid; grid-template-columns: 1fr; }
   .inline-tool-form input { min-width: 0; width: 100%; }
   .inline-tool-form button, .planner-actions button { width: 100%; min-height: 42px; }
